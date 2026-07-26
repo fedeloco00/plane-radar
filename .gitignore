@@ -10,3 +10,6 @@ android/local.properties
 android/build/
 android/app/build/
 android/*.iml
+
+# Downloaded build output - don't commit built APKs, CI produces these
+*.apk

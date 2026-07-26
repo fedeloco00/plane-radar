@@ -414,8 +414,8 @@ tbody tr.selected { background: #142219; box-shadow: inset 2px 0 0 var(--green);
   box-shadow: none !important;
   padding: 0 !important;
   font-family: inherit;
-  font-size: 11px;
-  line-height: 1.3;
+  font-size: 15px;
+  line-height: 1.35;
   white-space: nowrap;
 }
 .plane-tooltip::before { display: none; }
@@ -1664,10 +1664,10 @@ tbody tr.selected { background: #142219; box-shadow: inset 2px 0 0 var(--green);
 
     const west = x < cx;
     ctx.textAlign = west ? "left" : "right";
-    const tx = x + (west ? size * 0.018 : -size * 0.018);
-    let ty = y - size * 0.02;
-    const lineH = size * 0.024;
-    const fontSize = Math.round(size * 0.02);
+    const tx = x + (west ? size * 0.022 : -size * 0.022);
+    let ty = y - size * 0.024;
+    const lineH = size * 0.034;
+    const fontSize = Math.round(size * 0.029);
 
     ctx.font = `${fontSize}px monospace`;
     ctx.fillStyle = isSelected ? COLORS.selected : COLORS.callsign;

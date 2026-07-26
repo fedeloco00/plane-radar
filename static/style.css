@@ -243,8 +243,8 @@ button:hover { background: var(--green); color: #04170c; }
   box-shadow: none !important;
   padding: 0 !important;
   font-family: inherit;
-  font-size: 11px;
-  line-height: 1.3;
+  font-size: 15px;
+  line-height: 1.35;
   white-space: nowrap;
 }
 .plane-tooltip::before { display: none; }

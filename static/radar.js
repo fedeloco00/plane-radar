@@ -565,10 +565,10 @@
     // label tag: route/callsign, type, altitude
     const west = x < cx;
     ctx.textAlign = west ? "left" : "right";
-    const tx = x + (west ? size * 0.018 : -size * 0.018);
-    let ty = y - size * 0.02;
-    const lineH = size * 0.024;
-    const fontSize = Math.round(size * 0.02);
+    const tx = x + (west ? size * 0.022 : -size * 0.022);
+    let ty = y - size * 0.024;
+    const lineH = size * 0.034;
+    const fontSize = Math.round(size * 0.029);
 
     ctx.font = `${fontSize}px monospace`;
     ctx.fillStyle = isSelected ? COLORS.selected : COLORS.callsign;
