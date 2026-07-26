@@ -1,0 +1,2141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plane Radar (standalone)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root {
+  --bg: #05070a;
+  --panel: #0c1117;
+  --green: #33d17a;
+  --green-dim: #1c6e40;
+  --cyan: #4fd7ff;
+  --yellow: #ffd54a;
+  --magenta: #ff3ec8;
+  --red: #ff5533;
+  --text: #e8eef2;
+  --dim-text: #7d8b95;
+  --border: #1c242c;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "SF Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+  height: 100%;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-weight: bold;
+  color: var(--green);
+  letter-spacing: 0.06em;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.control-group label {
+  font-size: 12px;
+  color: var(--dim-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+input[type="text"], select {
+  background: #10161d;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+input#icaoInput {
+  width: 90px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+input.callsign-input {
+  width: 110px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+input#latInput, input#lonInput {
+  width: 76px;
+}
+
+button {
+  background: var(--green-dim);
+  color: #eafff2;
+  border: 1px solid var(--green);
+  padding: 7px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+button:hover { background: var(--green); color: #04170c; }
+
+.alt-filter {
+  position: relative;
+}
+
+.alt-filter-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  background: #0c1117;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 190px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+}
+
+.alt-filter-menu.hidden { display: none; }
+
+.alt-filter-menu label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.alt-filter-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.alt-filter-actions button {
+  flex: 1;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.zoom-group { gap: 8px; }
+
+.zoom-btn {
+  padding: 4px 11px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+#rangeValue {
+  min-width: 52px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.zoom-hint {
+  font-size: 11px;
+  color: var(--dim-text);
+  font-style: italic;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--dim-text);
+}
+
+.status {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--dim-text);
+  max-width: 420px;
+}
+.status.error { color: var(--red); }
+
+.layout {
+  flex: 1;
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.radar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.bezel {
+  width: 660px;
+  height: 660px;
+  max-width: 90vw;
+  max-height: 90vw;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #2a3138, #05070a 70%);
+  padding: 10px;
+  box-shadow: inset 0 0 20px #000, 0 0 30px rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+canvas#radar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #04080b;
+  cursor: pointer;
+}
+
+.footer {
+  text-align: center;
+  line-height: 1.5;
+}
+
+.footer-loc {
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  color: var(--text);
+}
+
+.footer-weather {
+  font-size: 13px;
+  color: var(--cyan);
+}
+
+.footer-time {
+  font-size: 13px;
+  color: var(--dim-text);
+}
+
+.sidebar {
+  width: 360px;
+  max-width: 90vw;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  height: fit-content;
+}
+
+.sidebar h2 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--dim-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+thead th {
+  text-align: left;
+  color: var(--dim-text);
+  font-weight: 500;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+tbody td {
+  padding: 5px 6px;
+  border-bottom: 1px solid #12181f;
+  color: var(--text);
+}
+
+tbody tr:hover { background: #10161d; cursor: pointer; }
+tbody tr.selected { background: #142219; box-shadow: inset 2px 0 0 var(--green); }
+
+.flight-cell { color: var(--yellow); }
+.type-cell { color: var(--cyan); }
+
+.details-panel {
+  border: 1px solid var(--green-dim);
+  border-radius: 6px;
+  background: #0a1712;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.details-panel.hidden { display: none; }
+
+.details-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #0e1f16;
+  border-bottom: 1px solid var(--green-dim);
+}
+
+.details-header h2 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--yellow);
+  text-transform: none;
+  letter-spacing: 0.03em;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: var(--dim-text);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+}
+.close-btn:hover { color: var(--red); background: transparent; }
+
+.details-body { padding: 10px 12px; }
+
+.details-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid #12211a;
+  font-size: 13px;
+}
+.details-row:last-child { border-bottom: none; }
+
+.details-label {
+  color: var(--dim-text);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding-top: 2px;
+}
+
+.details-row span:last-child {
+  text-align: right;
+  color: var(--text);
+}
+
+.view-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.view-btn {
+  background: transparent;
+  color: var(--dim-text);
+  border: 1px solid var(--border);
+}
+
+.view-btn.active {
+  background: var(--green-dim);
+  color: #eafff2;
+  border-color: var(--green);
+}
+
+.map-bezel {
+  width: 660px;
+  height: 660px;
+  max-width: 90vw;
+  max-height: 90vw;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: 0 0 30px rgba(0,0,0,0.6);
+}
+
+.map-bezel.hidden, .bezel.hidden { display: none; }
+
+#mapView {
+  width: 100%;
+  height: 100%;
+  background: #04080b;
+}
+
+/* Leaflet dark-theme tweaks to match the app */
+.leaflet-container {
+  background: #04080b;
+  font-family: inherit;
+}
+
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: #0c1117;
+  color: var(--text);
+}
+
+.leaflet-control-attribution {
+  background: rgba(12, 17, 23, 0.75) !important;
+  color: var(--dim-text) !important;
+}
+.leaflet-control-attribution a { color: var(--cyan) !important; }
+
+.plane-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.plane-tooltip::before { display: none; }
+.plane-tip-call { color: var(--text); }
+.plane-tip-type { color: var(--cyan); }
+.plane-tip-alt { color: var(--alt, #ffb648); }
+.plane-tip-selected .plane-tip-call { color: var(--green); }
+
+.home-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--text) !important;
+  font-weight: bold;
+  font-family: inherit;
+}
+.home-tooltip::before { display: none; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <header class="controls">
+      <span class="brand">PLANE RADAR</span>
+      <div class="control-group">
+        <label for="icaoInput">Airport ICAO</label>
+        <input id="icaoInput" type="text" maxlength="4" placeholder="KRDU" autocomplete="off" spellcheck="false">
+      </div>
+      <button id="goBtn">Go</button>
+      <div class="control-group">
+        <label for="latInput">Lat / Lon</label>
+        <input id="latInput" type="text" inputmode="decimal" placeholder="35.88" autocomplete="off">
+        <input id="lonInput" type="text" inputmode="decimal" placeholder="-78.79" autocomplete="off">
+      </div>
+      <button id="latLonGoBtn">Go</button>
+      <button id="geoBtn" title="Center on my current location">Use my location</button>
+      <div class="control-group zoom-group">
+        <label>Range</label>
+        <button id="zoomOutBtn" class="zoom-btn" title="Zoom out">&minus;</button>
+        <span id="rangeValue">25 nm</span>
+        <button id="zoomInBtn" class="zoom-btn" title="Zoom in">&plus;</button>
+        <span class="zoom-hint">scroll / pinch the radar to zoom</span>
+      </div>
+      <label class="toggle"><input id="routesToggle" type="checkbox" checked> routes</label>
+      <label class="toggle"><input id="weatherToggle" type="checkbox" checked> weather</label>
+      <label class="toggle" title="Off by default. If a direct request to adsb.fi/adsbdb/the airport database is blocked (CORS), retry it through the public proxy api.allorigins.win. Your queried lat/lon and range get routed through that third-party server - not under our control, no privacy or uptime guarantees.">
+        <input id="corsProxyToggle" type="checkbox"> CORS proxy fallback
+      </label>
+      <div class="control-group">
+        <label for="callsignFilter">Callsign</label>
+        <input id="callsignFilter" class="callsign-input" type="text" placeholder="NJE, AF" autocomplete="off" spellcheck="false" title="Comma-separated callsign prefixes, e.g. NJE, AF">
+      </div>
+      <div class="control-group">
+        <label for="registrationFilter">Registration</label>
+        <input id="registrationFilter" class="callsign-input" type="text" placeholder="N, G-" autocomplete="off" spellcheck="false" title="Comma-separated registration prefixes, e.g. N, G-">
+      </div>
+      <div class="control-group alt-filter">
+        <button id="altFilterBtn" type="button">Altitude &#9662;</button>
+        <div id="altFilterMenu" class="alt-filter-menu hidden">
+          <label><input type="checkbox" data-band="ground-5000" checked> Ground &ndash; 5,000 ft</label>
+          <label><input type="checkbox" data-band="5000-10000" checked> 5,000 &ndash; 10,000 ft</label>
+          <label><input type="checkbox" data-band="10000-20000" checked> 10,000 &ndash; 20,000 ft</label>
+          <label><input type="checkbox" data-band="20000-30000" checked> 20,000 &ndash; 30,000 ft</label>
+          <label><input type="checkbox" data-band="30000-40000" checked> 30,000 &ndash; 40,000 ft</label>
+          <label><input type="checkbox" data-band="40000-50000" checked> 40,000 &ndash; 50,000 ft</label>
+          <div class="alt-filter-actions">
+            <button id="altFilterAll" type="button">All</button>
+            <button id="altFilterNone" type="button">None</button>
+          </div>
+        </div>
+      </div>
+      <span id="statusMsg" class="status"></span>
+    </header>
+
+    <main class="layout">
+      <div class="radar-wrap">
+        <div class="view-toggle">
+          <button id="viewRadarBtn" class="view-btn active" type="button">Radar</button>
+          <button id="viewMapBtn" class="view-btn" type="button">Map</button>
+        </div>
+        <div class="bezel" id="radarBezel">
+          <canvas id="radar" width="640" height="640"></canvas>
+        </div>
+        <div class="map-bezel hidden" id="mapBezel">
+          <div id="mapView"></div>
+        </div>
+        <div class="footer">
+          <div id="footerLoc" class="footer-loc">--</div>
+          <div id="footerWeather" class="footer-weather">&nbsp;</div>
+          <div id="footerTime" class="footer-time">--:-- -- ---</div>
+        </div>
+      </div>
+
+      <aside class="sidebar">
+        <div id="detailsPanel" class="details-panel hidden">
+          <div class="details-header">
+            <h2 id="detailsTitle">--</h2>
+            <button id="detailsClose" class="close-btn" title="Close">&times;</button>
+          </div>
+          <div class="details-body">
+            <div class="details-row"><span class="details-label">Type</span><span id="detailsType">--</span></div>
+            <div class="details-row"><span class="details-label">Registration</span><span id="detailsReg">--</span></div>
+            <div class="details-row"><span class="details-label">Route</span><span id="detailsRoute">--</span></div>
+            <div class="details-row"><span class="details-label">Altitude</span><span id="detailsAlt">--</span></div>
+            <div class="details-row"><span class="details-label">Ground speed</span><span id="detailsGs">--</span></div>
+            <div class="details-row"><span class="details-label">Heading</span><span id="detailsTrack">--</span></div>
+            <div class="details-row"><span class="details-label">Distance / Brg</span><span id="detailsDist">--</span></div>
+            <div class="details-row"><span class="details-label">Squawk</span><span id="detailsSquawk">--</span></div>
+          </div>
+        </div>
+
+        <h2>Aircraft <span id="aircraftCount">(0)</span></h2>
+        <table id="aircraftTable">
+          <thead>
+            <tr><th>Flight</th><th>Type</th><th>Alt</th><th>Dist</th><th>Brg</th></tr>
+          </thead>
+          <tbody id="aircraftBody"></tbody>
+        </table>
+      </aside>
+    </main>
+  </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // Data layer: talks directly to adsb.fi / adsbdb / open-meteo /
+  // OurAirports from the browser. No backend required.
+  //
+  // NOTE: this relies on those services allowing cross-origin
+  // browser requests (CORS). If a request fails with a CORS error
+  // in the console, that API isn't reachable this way from a plain
+  // static page and you'll need the Flask version (app.py) instead,
+  // which proxies these calls server-side.
+  // ============================================================
+
+  const ADSB_FI_BASE = "https://opendata.adsb.fi/api/v3";
+  // Fallback live-position source, tried only if adsb.fi's request itself
+  // fails (network/CORS/HTTP error). Same "ac" JSON shape and same 250nm
+  // point-query cap as adsb.fi - a second, independent feeder network to
+  // fall back on, not a way around that limit.
+  const AIRPLANES_LIVE_BASE = "https://api.airplanes.live/v2";
+  const ADSBDB_BASE = "https://api.adsbdb.com/v0";
+  const OPEN_METEO_BASE = "https://api.open-meteo.com/v1/forecast";
+  const AIRPORTS_CSV_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv";
+  const AIRPORTS_CACHE_KEY = "plane-radar-airports-v1";
+  // Opt-in fallback for when a browser blocks direct cross-origin requests
+  // (confirmed happening with adsb.fi, which returns 200 but no
+  // Access-Control-Allow-Origin header). allorigins.win is a public,
+  // no-signup CORS proxy - your queried lat/lon/range get routed through
+  // its servers when this is enabled. Off unless the user turns it on.
+  const CORS_PROXY_PREFIX = "https://api.allorigins.win/raw?url=";
+
+  // Tries a direct fetch first; only falls back to the public proxy above if
+  // that fails AND the user has opted in via the "CORS proxy" checkbox.
+  //
+  // Important: fetch() only ever *rejects* (throws) when a request is
+  // genuinely blocked (CORS, DNS, offline, etc). If the server actually
+  // responded - even with a 404 or 500 - fetch() resolves normally with
+  // that status; CORS did NOT block it, so there's nothing to fall back
+  // from. That's why this only inspects success/failure of fetch() itself,
+  // and leaves status-code handling (like adsbdb's 404 for "unknown
+  // callsign") to the caller.
+  async function fetchMaybeViaProxy(url) {
+    try {
+      const resp = await fetch(url);
+      return { resp, viaProxy: false };
+    } catch (directErr) {
+      if (!state.useCorsProxy) {
+        directErr.corsProxyAttempted = false;
+        throw directErr;
+      }
+      try {
+        const resp = await fetch(CORS_PROXY_PREFIX + encodeURIComponent(url));
+        if (!resp.ok) throw new Error(`proxy HTTP ${resp.status}`);
+        return { resp, viaProxy: true };
+      } catch (proxyErr) {
+        const combined = new Error(
+          `direct request blocked (${directErr.message}); CORS proxy fallback also failed (${proxyErr.message})`
+        );
+        combined.corsProxyAttempted = true;
+        throw combined;
+      }
+    }
+  }
+
+  function bearingDistanceNm(lat1, lon1, lat2, lon2) {
+    const R_NM = 3440.065;
+    const toRad = Math.PI / 180;
+    const phi1 = lat1 * toRad, phi2 = lat2 * toRad;
+    const dphi = (lat2 - lat1) * toRad, dlmb = (lon2 - lon1) * toRad;
+    const a = Math.sin(dphi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dlmb / 2) ** 2;
+    const dist = 2 * R_NM * Math.asin(Math.min(1, Math.sqrt(a)));
+    const y = Math.sin(dlmb) * Math.cos(phi2);
+    const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dlmb);
+    const brng = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    return { brng, dist };
+  }
+
+  // adsb.fi's public dist endpoint hard-caps at 250nm (empirically confirmed:
+  // requests above 250 return empty, even though the radar's display/zoom
+  // range can go much further out).
+  const MAX_QUERY_DIST_NM = 250;
+
+  async function fetchAircraftRaw(lat, lon, rangeNm) {
+    const queryDistNm = Math.min(rangeNm, MAX_QUERY_DIST_NM);
+    const adsbFiUrl = `${ADSB_FI_BASE}/lat/${lat}/lon/${lon}/dist/${queryDistNm}`;
+    const airplanesLiveUrl = `${AIRPLANES_LIVE_BASE}/point/${lat}/${lon}/${queryDistNm}`;
+
+    let data, viaProxy, source;
+    try {
+      const r = await fetchMaybeViaProxy(adsbFiUrl);
+      if (!r.resp.ok) throw new Error(`adsb.fi HTTP ${r.resp.status}`);
+      data = await r.resp.json();
+      viaProxy = r.viaProxy;
+      source = "adsb.fi";
+    } catch (primaryErr) {
+      // adsb.fi itself failed (not just empty) - try the independent
+      // airplanes.live feed before giving up.
+      try {
+        const r = await fetchMaybeViaProxy(airplanesLiveUrl);
+        if (!r.resp.ok) throw new Error(`airplanes.live HTTP ${r.resp.status}`);
+        data = await r.resp.json();
+        viaProxy = r.viaProxy;
+        source = "airplanes.live";
+      } catch (fallbackErr) {
+        const combined = new Error(
+          `adsb.fi failed (${primaryErr.message}); airplanes.live fallback also failed (${fallbackErr.message})`
+        );
+        combined.corsProxyAttempted = !!(primaryErr.corsProxyAttempted || fallbackErr.corsProxyAttempted);
+        throw combined;
+      }
+    }
+
+    const aircraft = [];
+    for (const ac of (data.ac || [])) {
+      if (ac.lat == null || ac.lon == null) continue;
+      const { brng, dist } = bearingDistanceNm(lat, lon, ac.lat, ac.lon);
+      aircraft.push({
+        hex: ac.hex,
+        flight: (ac.flight || "").trim(),
+        reg: ac.r,
+        type: ac.t,
+        desc: ac.desc,
+        alt_baro: ac.alt_baro,
+        on_ground: ac.alt_baro === "ground",
+        gs: ac.gs,
+        track: ac.track,
+        baro_rate: ac.baro_rate,
+        squawk: ac.squawk,
+        category: ac.category,
+        lat: ac.lat,
+        lon: ac.lon,
+        bearing: Math.round(brng * 10) / 10,
+        distance_nm: Math.round(dist * 100) / 100,
+      });
+    }
+    aircraft.sort((a, b) => a.distance_nm - b.distance_nm);
+    return { aircraft, viaProxy, queryDistNm, source };
+  }
+
+  async function fetchRouteRaw(callsign) {
+    try {
+      const { resp } = await fetchMaybeViaProxy(`${ADSBDB_BASE}/callsign/${encodeURIComponent(callsign)}`);
+      if (resp.status === 404) return { callsign, origin: null, destination: null, airline: null };
+      if (!resp.ok) throw new Error(`adsbdb HTTP ${resp.status}`);
+      const data = await resp.json();
+      const route = data.response && data.response.flightroute;
+      if (!route) return { callsign, origin: null, destination: null, airline: null };
+      return {
+        callsign,
+        origin: route.origin && route.origin.icao_code,
+        destination: route.destination && route.destination.icao_code,
+        airline: route.airline && route.airline.name,
+      };
+    } catch (e) {
+      return { callsign, origin: null, destination: null, airline: null };
+    }
+  }
+
+  async function fetchWeatherRaw(lat, lon) {
+    const url = `${OPEN_METEO_BASE}?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code&timezone=auto`;
+    const { resp } = await fetchMaybeViaProxy(url);
+    if (!resp.ok) throw new Error(`open-meteo HTTP ${resp.status}`);
+    const data = await resp.json();
+    const cur = data.current || {};
+    return {
+      temperature_c: cur.temperature_2m,
+      humidity: cur.relative_humidity_2m,
+      weather_code: cur.weather_code,
+      timezone: data.timezone,
+    };
+  }
+
+  // Minimal RFC4180-ish CSV parser: handles quoted fields with embedded
+  // commas / doubled quotes, which the OurAirports export uses for names.
+  function parseCsv(text) {
+    const rows = [];
+    let row = [], field = "", inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else inQuotes = false;
+        } else field += c;
+      } else if (c === '"') {
+        inQuotes = true;
+      } else if (c === ',') {
+        row.push(field); field = "";
+      } else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(field); field = "";
+        if (row.length > 1 || row[0] !== "") rows.push(row);
+        row = [];
+      } else {
+        field += c;
+      }
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  // Built-in list of ~300 major world airports (ICAO -> [iata, name, city, lat, lon]),
+  // assembled from general knowledge so ICAO lookups work with zero network
+  // dependency. Coordinates are precise enough to center the radar (a few hundred
+  // meters of slop doesn't matter at nm-scale ranges) but weren't individually
+  // re-verified against a primary source - treat as "good enough for this app,"
+  // not surveyed. This is what makes airports like KRDU resolve instantly even
+  // if the browser blocks the extended-database fetch below.
+  const EMBEDDED_AIRPORTS = {
+    KATL: ["ATL", "Hartsfield-Jackson Atlanta Intl", "Atlanta", 33.6367, -84.4281],
+    KLAX: ["LAX", "Los Angeles Intl", "Los Angeles", 33.9425, -118.4081],
+    KORD: ["ORD", "Chicago O'Hare Intl", "Chicago", 41.9742, -87.9073],
+    KDFW: ["DFW", "Dallas/Fort Worth Intl", "Dallas", 32.8998, -97.0403],
+    KDEN: ["DEN", "Denver Intl", "Denver", 39.8561, -104.6737],
+    KJFK: ["JFK", "John F Kennedy Intl", "New York", 40.6413, -73.7781],
+    KSFO: ["SFO", "San Francisco Intl", "San Francisco", 37.6213, -122.3790],
+    KSEA: ["SEA", "Seattle-Tacoma Intl", "Seattle", 47.4502, -122.3088],
+    KLAS: ["LAS", "Harry Reid Intl", "Las Vegas", 36.0840, -115.1537],
+    KMCO: ["MCO", "Orlando Intl", "Orlando", 28.4312, -81.3081],
+    KMIA: ["MIA", "Miami Intl", "Miami", 25.7959, -80.2870],
+    KPHX: ["PHX", "Phoenix Sky Harbor Intl", "Phoenix", 33.4342, -112.0116],
+    KIAH: ["IAH", "George Bush Intercontinental", "Houston", 29.9902, -95.3368],
+    KBOS: ["BOS", "Logan Intl", "Boston", 42.3656, -71.0096],
+    KMSP: ["MSP", "Minneapolis-St Paul Intl", "Minneapolis", 44.8848, -93.2223],
+    KFLL: ["FLL", "Fort Lauderdale-Hollywood Intl", "Fort Lauderdale", 26.0726, -80.1527],
+    KDTW: ["DTW", "Detroit Metro", "Detroit", 42.2124, -83.3534],
+    KPHL: ["PHL", "Philadelphia Intl", "Philadelphia", 39.8744, -75.2424],
+    KLGA: ["LGA", "LaGuardia", "New York", 40.7769, -73.8740],
+    KEWR: ["EWR", "Newark Liberty Intl", "Newark", 40.6895, -74.1745],
+    KBWI: ["BWI", "Baltimore/Washington Intl", "Baltimore", 39.1754, -76.6684],
+    KIAD: ["IAD", "Washington Dulles Intl", "Washington", 38.9531, -77.4565],
+    KDCA: ["DCA", "Ronald Reagan Washington National", "Washington", 38.8512, -77.0402],
+    KSAN: ["SAN", "San Diego Intl", "San Diego", 32.7338, -117.1933],
+    KTPA: ["TPA", "Tampa Intl", "Tampa", 27.9755, -82.5332],
+    KSLC: ["SLC", "Salt Lake City Intl", "Salt Lake City", 40.7884, -111.9778],
+    KMDW: ["MDW", "Chicago Midway Intl", "Chicago", 41.7868, -87.7522],
+    PHNL: ["HNL", "Daniel K Inouye Intl", "Honolulu", 21.3245, -157.9251],
+    KPDX: ["PDX", "Portland Intl", "Portland", 45.5898, -122.5951],
+    KSTL: ["STL", "St. Louis Lambert Intl", "St. Louis", 38.7487, -90.3700],
+    KCLT: ["CLT", "Charlotte Douglas Intl", "Charlotte", 35.2144, -80.9473],
+    KRDU: ["RDU", "Raleigh-Durham Intl", "Raleigh/Durham", 35.8776, -78.7875],
+    KAUS: ["AUS", "Austin-Bergstrom Intl", "Austin", 30.1975, -97.6664],
+    KBNA: ["BNA", "Nashville Intl", "Nashville", 36.1263, -86.6774],
+    KMCI: ["MCI", "Kansas City Intl", "Kansas City", 39.2976, -94.7139],
+    KIND: ["IND", "Indianapolis Intl", "Indianapolis", 39.7169, -86.2956],
+    KCVG: ["CVG", "Cincinnati/N Kentucky Intl", "Cincinnati", 39.0488, -84.6678],
+    KCLE: ["CLE", "Cleveland Hopkins Intl", "Cleveland", 41.4117, -81.8498],
+    KPIT: ["PIT", "Pittsburgh Intl", "Pittsburgh", 40.4915, -80.2329],
+    KCMH: ["CMH", "John Glenn Columbus Intl", "Columbus", 39.9980, -82.8919],
+    KMKE: ["MKE", "Milwaukee Mitchell Intl", "Milwaukee", 42.9472, -87.8966],
+    KOMA: ["OMA", "Eppley Airfield", "Omaha", 41.3032, -95.8941],
+    KOKC: ["OKC", "Will Rogers World", "Oklahoma City", 35.3931, -97.6007],
+    KTUL: ["TUL", "Tulsa Intl", "Tulsa", 36.1984, -95.8881],
+    KABQ: ["ABQ", "Albuquerque Intl Sunport", "Albuquerque", 35.0402, -106.6091],
+    KELP: ["ELP", "El Paso Intl", "El Paso", 31.8072, -106.3781],
+    KJAX: ["JAX", "Jacksonville Intl", "Jacksonville", 30.4941, -81.6879],
+    KRSW: ["RSW", "Southwest Florida Intl", "Fort Myers", 26.5362, -81.7552],
+    KPBI: ["PBI", "Palm Beach Intl", "West Palm Beach", 26.6832, -80.0956],
+    KSAT: ["SAT", "San Antonio Intl", "San Antonio", 29.5337, -98.4698],
+    KMSY: ["MSY", "Louis Armstrong New Orleans Intl", "New Orleans", 29.9934, -90.2580],
+    KMEM: ["MEM", "Memphis Intl", "Memphis", 35.0424, -89.9767],
+    KSDF: ["SDF", "Louisville Muhammad Ali Intl", "Louisville", 38.1744, -85.7360],
+    KBHM: ["BHM", "Birmingham-Shuttlesworth Intl", "Birmingham", 33.5629, -86.7535],
+    KRIC: ["RIC", "Richmond Intl", "Richmond", 37.5052, -77.3197],
+    KORF: ["ORF", "Norfolk Intl", "Norfolk", 36.8946, -76.2012],
+    KBUF: ["BUF", "Buffalo Niagara Intl", "Buffalo", 42.9405, -78.7322],
+    KROC: ["ROC", "Greater Rochester Intl", "Rochester", 43.1189, -77.6724],
+    KALB: ["ALB", "Albany Intl", "Albany", 42.7483, -73.8017],
+    KBDL: ["BDL", "Bradley Intl", "Hartford", 41.9389, -72.6832],
+    KPVD: ["PVD", "T.F. Green Intl", "Providence", 41.7240, -71.4283],
+    KPWM: ["PWM", "Portland Intl Jetport", "Portland (ME)", 43.6462, -70.3093],
+    KBGR: ["BGR", "Bangor Intl", "Bangor", 44.8074, -68.8281],
+    KBTV: ["BTV", "Burlington Intl", "Burlington", 44.4719, -73.1533],
+    KGRR: ["GRR", "Gerald R Ford Intl", "Grand Rapids", 42.8808, -85.5228],
+    KDSM: ["DSM", "Des Moines Intl", "Des Moines", 41.5340, -93.6631],
+    KFAR: ["FAR", "Hector Intl", "Fargo", 46.9207, -96.8158],
+    KGEG: ["GEG", "Spokane Intl", "Spokane", 47.6199, -117.5338],
+    KBOI: ["BOI", "Boise Air Terminal", "Boise", 43.5644, -116.2228],
+    PANC: ["ANC", "Ted Stevens Anchorage Intl", "Anchorage", 61.1743, -149.9963],
+    PAFA: ["FAI", "Fairbanks Intl", "Fairbanks", 64.8151, -147.8563],
+    PAJN: ["JNU", "Juneau Intl", "Juneau", 58.3549, -134.5763],
+    KRNO: ["RNO", "Reno-Tahoe Intl", "Reno", 39.4991, -119.7681],
+    KSMF: ["SMF", "Sacramento Intl", "Sacramento", 38.6954, -121.5908],
+    KOAK: ["OAK", "Oakland Intl", "Oakland", 37.7126, -122.2197],
+    KSJC: ["SJC", "San Jose Mineta Intl", "San Jose", 37.3639, -121.9289],
+    KBUR: ["BUR", "Hollywood Burbank", "Burbank", 34.2007, -118.3587],
+    KONT: ["ONT", "Ontario Intl", "Ontario (CA)", 34.0559, -117.6005],
+    KSNA: ["SNA", "John Wayne Airport", "Santa Ana", 33.6757, -117.8682],
+    KLGB: ["LGB", "Long Beach Airport", "Long Beach", 33.8177, -118.1516],
+    KTUS: ["TUS", "Tucson Intl", "Tucson", 32.1161, -110.9410],
+    CYYZ: ["YYZ", "Toronto Pearson Intl", "Toronto", 43.6777, -79.6248],
+    CYVR: ["YVR", "Vancouver Intl", "Vancouver", 49.1967, -123.1815],
+    CYUL: ["YUL", "Montreal-Trudeau Intl", "Montreal", 45.4706, -73.7408],
+    CYYC: ["YYC", "Calgary Intl", "Calgary", 51.1315, -114.0106],
+    CYEG: ["YEG", "Edmonton Intl", "Edmonton", 53.3097, -113.5800],
+    CYOW: ["YOW", "Ottawa Macdonald-Cartier Intl", "Ottawa", 45.3225, -75.6692],
+    CYWG: ["YWG", "Winnipeg James A Richardson Intl", "Winnipeg", 49.9100, -97.2399],
+    CYHZ: ["YHZ", "Halifax Stanfield Intl", "Halifax", 44.8808, -63.5086],
+    CYQB: ["YQB", "Quebec City Jean Lesage Intl", "Quebec City", 46.7911, -71.3933],
+    MMMX: ["MEX", "Mexico City Intl", "Mexico City", 19.4363, -99.0721],
+    MMUN: ["CUN", "Cancun Intl", "Cancun", 21.0365, -86.8771],
+    MMGL: ["GDL", "Guadalajara Intl", "Guadalajara", 20.5218, -103.3112],
+    MMMY: ["MTY", "Monterrey Intl", "Monterrey", 25.7785, -100.1069],
+    MMPR: ["PVR", "Puerto Vallarta Intl", "Puerto Vallarta", 20.6801, -105.2544],
+    MMSD: ["SJD", "Los Cabos Intl", "San Jose del Cabo", 23.1518, -109.7211],
+    MROC: ["SJO", "Juan Santamaria Intl", "San Jose (CR)", 9.9981, -84.2041],
+    MPTO: ["PTY", "Tocumen Intl", "Panama City", 9.0714, -79.3835],
+    MGGT: ["GUA", "La Aurora Intl", "Guatemala City", 14.5833, -90.5275],
+    TJSJ: ["SJU", "Luis Munoz Marin Intl", "San Juan", 18.4394, -66.0018],
+    MKJP: ["KIN", "Norman Manley Intl", "Kingston", 17.9357, -76.7875],
+    MDSD: ["SDQ", "Las Americas Intl", "Santo Domingo", 18.4297, -69.6689],
+    MUHA: ["HAV", "Jose Marti Intl", "Havana", 22.9892, -82.4091],
+    TBPB: ["BGI", "Grantley Adams Intl", "Bridgetown", 13.0746, -59.4925],
+    TNCM: ["SXM", "Princess Juliana Intl", "Sint Maarten", 18.0410, -63.1089],
+    SBGR: ["GRU", "Sao Paulo/Guarulhos Intl", "Sao Paulo", -23.4356, -46.4731],
+    SBSP: ["CGH", "Congonhas Airport", "Sao Paulo", -23.6261, -46.6564],
+    SBGL: ["GIG", "Rio de Janeiro/Galeao Intl", "Rio de Janeiro", -22.8090, -43.2506],
+    SBBR: ["BSB", "Brasilia Intl", "Brasilia", -15.8697, -47.9208],
+    SAEZ: ["EZE", "Ministro Pistarini Intl", "Buenos Aires", -34.8222, -58.5358],
+    SABE: ["AEP", "Jorge Newbery Airfield", "Buenos Aires", -34.5592, -58.4156],
+    SCEL: ["SCL", "Arturo Merino Benitez Intl", "Santiago", -33.3930, -70.7858],
+    SPJC: ["LIM", "Jorge Chavez Intl", "Lima", -12.0219, -77.1143],
+    SKBO: ["BOG", "El Dorado Intl", "Bogota", 4.7016, -74.1469],
+    SEQM: ["UIO", "Mariscal Sucre Intl", "Quito", -0.1292, -78.3575],
+    SVMI: ["CCS", "Simon Bolivar Intl", "Caracas", 10.6013, -66.9911],
+    SGAS: ["ASU", "Silvio Pettirossi Intl", "Asuncion", -25.2400, -57.5199],
+    SUMU: ["MVD", "Carrasco Intl", "Montevideo", -34.8384, -56.0308],
+    SLLP: ["LPB", "El Alto Intl", "La Paz", -16.5133, -68.1925],
+    EGLL: ["LHR", "London Heathrow", "London", 51.4700, -0.4543],
+    EGKK: ["LGW", "London Gatwick", "London", 51.1481, -0.1903],
+    EGSS: ["STN", "London Stansted", "London", 51.8860, 0.2389],
+    EGGW: ["LTN", "London Luton", "London", 51.8747, -0.3683],
+    EGCC: ["MAN", "Manchester Airport", "Manchester", 53.3537, -2.2750],
+    EGPH: ["EDI", "Edinburgh Airport", "Edinburgh", 55.9500, -3.3725],
+    EGPF: ["GLA", "Glasgow Intl", "Glasgow", 55.8719, -4.4331],
+    EIDW: ["DUB", "Dublin Airport", "Dublin", 53.4213, -6.2701],
+    LFPG: ["CDG", "Paris Charles de Gaulle", "Paris", 49.0097, 2.5479],
+    LFPO: ["ORY", "Paris Orly", "Paris", 48.7233, 2.3794],
+    LFMN: ["NCE", "Nice Cote d'Azur", "Nice", 43.6584, 7.2159],
+    LFML: ["MRS", "Marseille Provence", "Marseille", 43.4393, 5.2214],
+    LFLL: ["LYS", "Lyon-Saint Exupery", "Lyon", 45.7256, 5.0811],
+    EDDF: ["FRA", "Frankfurt am Main", "Frankfurt", 50.0379, 8.5622],
+    EDDM: ["MUC", "Munich Airport", "Munich", 48.3538, 11.7861],
+    EDDB: ["BER", "Berlin Brandenburg", "Berlin", 52.3667, 13.5033],
+    EDDL: ["DUS", "Dusseldorf Airport", "Dusseldorf", 51.2895, 6.7668],
+    EDDH: ["HAM", "Hamburg Airport", "Hamburg", 53.6304, 9.9882],
+    EDDK: ["CGN", "Cologne Bonn", "Cologne", 50.8659, 7.1427],
+    LSZH: ["ZRH", "Zurich Airport", "Zurich", 47.4647, 8.5492],
+    LSGG: ["GVA", "Geneva Airport", "Geneva", 46.2381, 6.1090],
+    LOWW: ["VIE", "Vienna Intl", "Vienna", 48.1103, 16.5697],
+    EBBR: ["BRU", "Brussels Airport", "Brussels", 50.9014, 4.4844],
+    EHAM: ["AMS", "Amsterdam Schiphol", "Amsterdam", 52.3086, 4.7639],
+    LPPT: ["LIS", "Humberto Delgado Airport", "Lisbon", 38.7813, -9.1359],
+    LPPR: ["OPO", "Francisco Sa Carneiro", "Porto", 41.2481, -8.6814],
+    LEMD: ["MAD", "Adolfo Suarez Madrid-Barajas", "Madrid", 40.4936, -3.5668],
+    LEBL: ["BCN", "Barcelona-El Prat", "Barcelona", 41.2971, 2.0785],
+    LEMG: ["AGP", "Malaga-Costa del Sol", "Malaga", 36.6749, -4.4991],
+    LEPA: ["PMI", "Palma de Mallorca", "Palma", 39.5517, 2.7388],
+    LEVC: ["VLC", "Valencia Airport", "Valencia", 39.4893, -0.4816],
+    LIRF: ["FCO", "Rome Fiumicino", "Rome", 41.8003, 12.2389],
+    LIMC: ["MXP", "Milan Malpensa", "Milan", 45.6306, 8.7281],
+    LIML: ["LIN", "Milan Linate", "Milan", 45.4451, 9.2767],
+    LIRN: ["NAP", "Naples Intl", "Naples", 40.8860, 14.2908],
+    LGAV: ["ATH", "Athens Intl", "Athens", 37.9364, 23.9445],
+    LTFM: ["IST", "Istanbul Airport", "Istanbul", 41.2753, 28.7519],
+    LTFJ: ["SAW", "Istanbul Sabiha Gokcen", "Istanbul", 40.8986, 29.3092],
+    ENGM: ["OSL", "Oslo Gardermoen", "Oslo", 60.1939, 11.1004],
+    ESSA: ["ARN", "Stockholm Arlanda", "Stockholm", 59.6519, 17.9186],
+    EKCH: ["CPH", "Copenhagen Kastrup", "Copenhagen", 55.6180, 12.6508],
+    EFHK: ["HEL", "Helsinki-Vantaa", "Helsinki", 60.3172, 24.9633],
+    BIKF: ["KEF", "Keflavik Intl", "Reykjavik", 63.9850, -22.6056],
+    LKPR: ["PRG", "Vaclav Havel Airport", "Prague", 50.1008, 14.2632],
+    EPWA: ["WAW", "Warsaw Chopin", "Warsaw", 52.1657, 20.9671],
+    LHBP: ["BUD", "Budapest Ferenc Liszt Intl", "Budapest", 47.4298, 19.2611],
+    LROP: ["OTP", "Bucharest Henri Coanda", "Bucharest", 44.5711, 26.0850],
+    LBSF: ["SOF", "Sofia Airport", "Sofia", 42.6952, 23.4062],
+    LDZA: ["ZAG", "Zagreb Airport", "Zagreb", 45.7429, 16.0688],
+    LJLJ: ["LJU", "Ljubljana Joze Pucnik", "Ljubljana", 46.2237, 14.4576],
+    LYBE: ["BEG", "Belgrade Nikola Tesla", "Belgrade", 44.8184, 20.3091],
+    LGTS: ["SKG", "Thessaloniki Makedonia", "Thessaloniki", 40.5197, 22.9709],
+    UUEE: ["SVO", "Moscow Sheremetyevo", "Moscow", 55.9726, 37.4146],
+    UUDD: ["DME", "Moscow Domodedovo", "Moscow", 55.4088, 37.9063],
+    ULLI: ["LED", "St Petersburg Pulkovo", "St Petersburg", 59.8003, 30.2625],
+    UKBB: ["KBP", "Kyiv Boryspil Intl", "Kyiv", 50.3450, 30.8947],
+    EYVI: ["VNO", "Vilnius Airport", "Vilnius", 54.6341, 25.2858],
+    EVRA: ["RIX", "Riga Airport", "Riga", 56.9236, 23.9711],
+    EETN: ["TLL", "Tallinn Lennart Meri", "Tallinn", 59.4133, 24.8328],
+    LSZB: ["BRN", "Bern Airport", "Bern", 46.9141, 7.4971],
+    OMDB: ["DXB", "Dubai Intl", "Dubai", 25.2532, 55.3657],
+    OMAA: ["AUH", "Abu Dhabi Intl", "Abu Dhabi", 24.4330, 54.6511],
+    OTHH: ["DOH", "Hamad Intl", "Doha", 25.2609, 51.6138],
+    OERK: ["RUH", "King Khalid Intl", "Riyadh", 24.9576, 46.6988],
+    OEJN: ["JED", "King Abdulaziz Intl", "Jeddah", 21.6796, 39.1565],
+    OLBA: ["BEY", "Rafic Hariri Intl", "Beirut", 33.8209, 35.4884],
+    OJAI: ["AMM", "Queen Alia Intl", "Amman", 31.7226, 35.9932],
+    LLBG: ["TLV", "Ben Gurion Airport", "Tel Aviv", 32.0114, 34.8867],
+    OKBK: ["KWI", "Kuwait Intl", "Kuwait City", 29.2266, 47.9689],
+    OBBI: ["BAH", "Bahrain Intl", "Manama", 26.2708, 50.6336],
+    OOMS: ["MCT", "Muscat Intl", "Muscat", 23.5933, 58.2844],
+    HECA: ["CAI", "Cairo Intl", "Cairo", 30.1219, 31.4056],
+    FAOR: ["JNB", "O.R. Tambo Intl", "Johannesburg", -26.1392, 28.2460],
+    FACT: ["CPT", "Cape Town Intl", "Cape Town", -33.9648, 18.6017],
+    HKJK: ["NBO", "Jomo Kenyatta Intl", "Nairobi", -1.3192, 36.9278],
+    DNMM: ["LOS", "Murtala Muhammed Intl", "Lagos", 6.5774, 3.3212],
+    GMMN: ["CMN", "Mohammed V Intl", "Casablanca", 33.3675, -7.5900],
+    DTTA: ["TUN", "Tunis-Carthage Intl", "Tunis", 36.8510, 10.2272],
+    HAAB: ["ADD", "Bole Intl", "Addis Ababa", 8.9779, 38.7993],
+    FQMA: ["MPM", "Maputo Intl", "Maputo", -25.9208, 32.5726],
+    FVHA: ["HRE", "Robert Gabriel Mugabe Intl", "Harare", -17.9318, 31.0928],
+    FLLS: ["LUN", "Kenneth Kaunda Intl", "Lusaka", -15.3308, 28.4526],
+    DGAA: ["ACC", "Kotoka Intl", "Accra", 5.6052, -0.1668],
+    GOOY: ["DSS", "Blaise Diagne Intl", "Dakar", 14.6708, -17.0733],
+    HTDA: ["DAR", "Julius Nyerere Intl", "Dar es Salaam", -6.8781, 39.2026],
+    VIDP: ["DEL", "Indira Gandhi Intl", "Delhi", 28.5562, 77.1000],
+    VABB: ["BOM", "Chhatrapati Shivaji Intl", "Mumbai", 19.0896, 72.8656],
+    VOBL: ["BLR", "Kempegowda Intl", "Bengaluru", 13.1986, 77.7066],
+    VOMM: ["MAA", "Chennai Intl", "Chennai", 12.9941, 80.1709],
+    VECC: ["CCU", "Netaji Subhas Chandra Bose Intl", "Kolkata", 22.6547, 88.4467],
+    VOHS: ["HYD", "Rajiv Gandhi Intl", "Hyderabad", 17.2403, 78.4294],
+    OPKC: ["KHI", "Jinnah Intl", "Karachi", 24.9065, 67.1608],
+    OPLA: ["LHE", "Allama Iqbal Intl", "Lahore", 31.5216, 74.4036],
+    OPIS: ["ISB", "Islamabad Intl", "Islamabad", 33.5491, 72.8256],
+    VNKT: ["KTM", "Tribhuvan Intl", "Kathmandu", 27.6966, 85.3591],
+    VGHS: ["DAC", "Hazrat Shahjalal Intl", "Dhaka", 23.8433, 90.3978],
+    VCBI: ["CMB", "Bandaranaike Intl", "Colombo", 7.1808, 79.8842],
+    UTTT: ["TAS", "Tashkent Intl", "Tashkent", 41.2579, 69.2812],
+    UAAA: ["ALA", "Almaty Intl", "Almaty", 43.3521, 77.0405],
+    ZBAA: ["PEK", "Beijing Capital Intl", "Beijing", 40.0801, 116.5846],
+    ZBAD: ["PKX", "Beijing Daxing Intl", "Beijing", 39.5098, 116.4106],
+    ZSPD: ["PVG", "Shanghai Pudong Intl", "Shanghai", 31.1443, 121.8083],
+    ZSSS: ["SHA", "Shanghai Hongqiao Intl", "Shanghai", 31.1979, 121.3363],
+    ZGGG: ["CAN", "Guangzhou Baiyun Intl", "Guangzhou", 23.3924, 113.2988],
+    ZGSZ: ["SZX", "Shenzhen Bao'an Intl", "Shenzhen", 22.6393, 113.8107],
+    ZUUU: ["CTU", "Chengdu Shuangliu Intl", "Chengdu", 30.5785, 103.9471],
+    ZUCK: ["CKG", "Chongqing Jiangbei Intl", "Chongqing", 29.7192, 106.6417],
+    ZHHH: ["WUH", "Wuhan Tianhe Intl", "Wuhan", 30.7838, 114.2081],
+    ZLXY: ["XIY", "Xi'an Xianyang Intl", "Xi'an", 34.4471, 108.7516],
+    VHHH: ["HKG", "Hong Kong Intl", "Hong Kong", 22.3080, 113.9185],
+    RCTP: ["TPE", "Taiwan Taoyuan Intl", "Taipei", 25.0797, 121.2342],
+    RCSS: ["TSA", "Taipei Songshan", "Taipei", 25.0694, 121.5522],
+    RJTT: ["HND", "Tokyo Haneda", "Tokyo", 35.5494, 139.7798],
+    RJAA: ["NRT", "Narita Intl", "Tokyo", 35.7647, 140.3864],
+    RJBB: ["KIX", "Kansai Intl", "Osaka", 34.4347, 135.2440],
+    RJOO: ["ITM", "Osaka Itami", "Osaka", 34.7855, 135.4382],
+    RJCC: ["CTS", "New Chitose Airport", "Sapporo", 42.7752, 141.6923],
+    RJFF: ["FUK", "Fukuoka Airport", "Fukuoka", 33.5859, 130.4506],
+    RJGG: ["NGO", "Chubu Centrair Intl", "Nagoya", 34.8584, 136.8054],
+    RKSI: ["ICN", "Incheon Intl", "Seoul", 37.4602, 126.4407],
+    RKSS: ["GMP", "Gimpo Intl", "Seoul", 37.5583, 126.7906],
+    RKPC: ["CJU", "Jeju Intl", "Jeju", 33.5113, 126.4930],
+    RKPK: ["PUS", "Gimhae Intl", "Busan", 35.1795, 128.9382],
+    VMMC: ["MFM", "Macau Intl", "Macau", 22.1496, 113.5915],
+    WSSS: ["SIN", "Singapore Changi", "Singapore", 1.3644, 103.9915],
+    WMKK: ["KUL", "Kuala Lumpur Intl", "Kuala Lumpur", 2.7456, 101.7099],
+    VTBS: ["BKK", "Suvarnabhumi Airport", "Bangkok", 13.6900, 100.7501],
+    VTBD: ["DMK", "Don Mueang Intl", "Bangkok", 13.9126, 100.6068],
+    VVNB: ["HAN", "Noi Bai Intl", "Hanoi", 21.2212, 105.8072],
+    VVTS: ["SGN", "Tan Son Nhat Intl", "Ho Chi Minh City", 10.8188, 106.6520],
+    WIII: ["CGK", "Soekarno-Hatta Intl", "Jakarta", -6.1256, 106.6559],
+    WADD: ["DPS", "Ngurah Rai Intl", "Denpasar (Bali)", -8.7482, 115.1671],
+    RPLL: ["MNL", "Ninoy Aquino Intl", "Manila", 14.5086, 121.0198],
+    RPVM: ["CEB", "Mactan-Cebu Intl", "Cebu", 10.3075, 123.9789],
+    VYYY: ["RGN", "Yangon Intl", "Yangon", 16.9073, 96.1332],
+    VDPP: ["PNH", "Phnom Penh Intl", "Phnom Penh", 11.5466, 104.8441],
+    VLVT: ["VTE", "Wattay Intl", "Vientiane", 17.9883, 102.5633],
+    WBSB: ["BWN", "Brunei Intl", "Bandar Seri Begawan", 4.9442, 114.9283],
+    YSSY: ["SYD", "Sydney Kingsford Smith", "Sydney", -33.9399, 151.1753],
+    YMML: ["MEL", "Melbourne Airport", "Melbourne", -37.6690, 144.8410],
+    YBBN: ["BNE", "Brisbane Airport", "Brisbane", -27.3842, 153.1175],
+    YPPH: ["PER", "Perth Airport", "Perth", -31.9403, 115.9670],
+    YPAD: ["ADL", "Adelaide Airport", "Adelaide", -34.9450, 138.5306],
+    YSCB: ["CBR", "Canberra Airport", "Canberra", -35.3069, 149.1950],
+    YBCG: ["OOL", "Gold Coast Airport", "Gold Coast", -28.1644, 153.5047],
+    YBCS: ["CNS", "Cairns Airport", "Cairns", -16.8858, 145.7554],
+    NZAA: ["AKL", "Auckland Airport", "Auckland", -37.0082, 174.7850],
+    NZWN: ["WLG", "Wellington Airport", "Wellington", -41.3272, 174.8053],
+    NZCH: ["CHC", "Christchurch Airport", "Christchurch", -43.4894, 172.5320],
+    PGUM: ["GUM", "Antonio B Won Pat Intl", "Guam", 13.4834, 144.7960],
+  };
+
+  let airportsDb = null;
+  let airportsExtendPromise = null;
+
+  function embeddedAirportsDb() {
+    if (!airportsDb) {
+      airportsDb = {};
+      for (const icao in EMBEDDED_AIRPORTS) {
+        const [iata, name, municipality, lat, lon] = EMBEDDED_AIRPORTS[icao];
+        airportsDb[icao] = { icao, iata, name, municipality, lat, lon };
+      }
+    }
+    return airportsDb;
+  }
+
+  // Best-effort background enhancement: try to extend the built-in list above
+  // with the full OurAirports database, for full worldwide coverage. This is
+  // NOT required for the app to work - if the browser blocks this cross-origin
+  // request (or it's just slow), the built-in major-airport list already
+  // covers the vast majority of real-world lookups.
+  function extendAirportsInBackground() {
+    if (airportsExtendPromise) return airportsExtendPromise;
+    const db = embeddedAirportsDb();
+
+    airportsExtendPromise = (async () => {
+      try {
+        const cached = localStorage.getItem(AIRPORTS_CACHE_KEY);
+        if (cached) {
+          Object.assign(db, JSON.parse(cached));
+          return;
+        }
+      } catch (e) { /* ignore - fall through to network fetch */ }
+
+      try {
+        const { resp } = await fetchMaybeViaProxy(AIRPORTS_CSV_URL);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const text = await resp.text();
+        const rows = parseCsv(text);
+        const header = rows[0];
+        const idx = {};
+        header.forEach((h, i) => { idx[h] = i; });
+
+        const extra = {};
+        for (let r = 1; r < rows.length; r++) {
+          const row = rows[r];
+          if (!row) continue;
+          const icao = ((row[idx.icao_code] || row[idx.ident] || "")).trim().toUpperCase();
+          if (!/^[A-Z0-9]{4}$/.test(icao)) continue;
+          const lat = parseFloat(row[idx.latitude_deg]);
+          const lon = parseFloat(row[idx.longitude_deg]);
+          if (!isFinite(lat) || !isFinite(lon)) continue;
+          extra[icao] = {
+            icao,
+            iata: ((row[idx.iata_code] || "")).trim().toUpperCase(),
+            name: ((row[idx.name] || "")).trim(),
+            municipality: ((row[idx.municipality] || "")).trim(),
+            lat, lon,
+          };
+        }
+        Object.assign(db, extra);
+        try { localStorage.setItem(AIRPORTS_CACHE_KEY, JSON.stringify(extra)); } catch (e) { /* quota - keep in-memory only */ }
+      } catch (e) {
+        console.warn("Extended airport database unavailable - falling back to the built-in list of ~300 major airports.", e);
+      }
+    })();
+
+    return airportsExtendPromise;
+  }
+
+  // Synchronous lookup against whatever's loaded so far (always at least the
+  // built-in list), while kicking off the background extension for next time.
+  function getAirport(icao) {
+    const db = embeddedAirportsDb();
+    extendAirportsInBackground(); // fire and forget
+    return db[icao.trim().toUpperCase()] || null;
+  }
+
+  // Async variant that, if the quick lookup misses, gives the background
+  // extension a chance to finish before giving up (used for the initial
+  // ICAO entry, where waiting a moment for an uncommon airport is worth it).
+  async function getAirportAwaitingExtension(icao) {
+    let apt = getAirport(icao);
+    if (!apt) {
+      await extendAirportsInBackground().catch(() => {});
+      apt = getAirport(icao);
+    }
+    return apt;
+  }
+
+  // ============================================================
+  // UI layer (same look & interactions as the Flask version)
+  // ============================================================
+
+  const COLORS = {
+    bg: "#04080b",
+    ring: "#1c6e40",
+    crosshair: "#123a24",
+    text: "#e8eef2",
+    dim: "#6f8a7c",
+    heading: "#ff5533",
+    headingGround: "#5a6570",
+    vector: "#ff3ec8",
+    callsign: "#e8eef2",
+    type: "#4fd7ff",
+    alt: "#ffb648",
+    home: "#e8eef2",
+    selected: "#33d17a",
+    limitRing: "#ffb648",
+  };
+
+  const NM_TO_M = 1852;
+  const MAP_TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+  const MAP_ATTRIBUTION =
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+  const AIRCRAFT_POLL_MS = 4000;
+  const WEATHER_POLL_MS = 15 * 60 * 1000;
+  const ROUTE_QUEUE_DELAY_MS = 350;
+  const HIT_RADIUS_PX = 22;
+  const MIN_RANGE_NM = 1;
+  // Display/zoom limit. Actual adsb.fi queries stay clamped to
+  // MAX_QUERY_DIST_NM (250) regardless - see fetchAircraftRaw above.
+  const MAX_RANGE_NM = 3000;
+  const DEFAULT_RANGE_NM = 25;
+  const RANGE_REFETCH_DEBOUNCE_MS = 450;
+
+  const ALT_BANDS = [
+    { id: "ground-5000", min: 0, max: 5000 },
+    { id: "5000-10000", min: 5000, max: 10000 },
+    { id: "10000-20000", min: 10000, max: 20000 },
+    { id: "20000-30000", min: 20000, max: 30000 },
+    { id: "30000-40000", min: 30000, max: 40000 },
+    { id: "40000-50000", min: 40000, max: 50000 },
+  ];
+
+  const els = {
+    icaoInput: document.getElementById("icaoInput"),
+    goBtn: document.getElementById("goBtn"),
+    latInput: document.getElementById("latInput"),
+    lonInput: document.getElementById("lonInput"),
+    latLonGoBtn: document.getElementById("latLonGoBtn"),
+    geoBtn: document.getElementById("geoBtn"),
+    routesToggle: document.getElementById("routesToggle"),
+    weatherToggle: document.getElementById("weatherToggle"),
+    statusMsg: document.getElementById("statusMsg"),
+    canvas: document.getElementById("radar"),
+    footerLoc: document.getElementById("footerLoc"),
+    footerWeather: document.getElementById("footerWeather"),
+    footerTime: document.getElementById("footerTime"),
+    aircraftCount: document.getElementById("aircraftCount"),
+    aircraftBody: document.getElementById("aircraftBody"),
+    callsignFilter: document.getElementById("callsignFilter"),
+    registrationFilter: document.getElementById("registrationFilter"),
+    corsProxyToggle: document.getElementById("corsProxyToggle"),
+    zoomInBtn: document.getElementById("zoomInBtn"),
+    zoomOutBtn: document.getElementById("zoomOutBtn"),
+    rangeValue: document.getElementById("rangeValue"),
+    altFilterBtn: document.getElementById("altFilterBtn"),
+    altFilterMenu: document.getElementById("altFilterMenu"),
+    altFilterAll: document.getElementById("altFilterAll"),
+    altFilterNone: document.getElementById("altFilterNone"),
+    detailsPanel: document.getElementById("detailsPanel"),
+    detailsClose: document.getElementById("detailsClose"),
+    detailsTitle: document.getElementById("detailsTitle"),
+    detailsType: document.getElementById("detailsType"),
+    detailsReg: document.getElementById("detailsReg"),
+    detailsRoute: document.getElementById("detailsRoute"),
+    detailsAlt: document.getElementById("detailsAlt"),
+    detailsGs: document.getElementById("detailsGs"),
+    detailsTrack: document.getElementById("detailsTrack"),
+    detailsDist: document.getElementById("detailsDist"),
+    detailsSquawk: document.getElementById("detailsSquawk"),
+    viewRadarBtn: document.getElementById("viewRadarBtn"),
+    viewMapBtn: document.getElementById("viewMapBtn"),
+    radarBezel: document.getElementById("radarBezel"),
+    mapBezel: document.getElementById("mapBezel"),
+  };
+
+  const ctx = els.canvas.getContext("2d");
+  const CANVAS_SIZE = els.canvas.width;
+
+  const state = {
+    mode: null,        // "icao" | "latlon"
+    icao: null,
+    lat: null,
+    lon: null,
+    rangeNm: DEFAULT_RANGE_NM,
+    locationLabel: "--",
+    aircraftTimer: null,
+    weatherTimer: null,
+    routeCache: new Map(),
+    routeQueue: [],
+    routeQueueBusy: false,
+    airportInfoCache: new Map(),
+    lastMarkers: [],
+    selectedHex: null,
+    lastAircraftByHex: new Map(),
+    lastQueryDistNm: null,  // adsb.fi's actual query radius from the last successful fetch
+    activeAltBands: new Set(ALT_BANDS.map((b) => b.id)),
+    callsignPrefixes: [],   // [] = no filter, show everything
+    registrationPrefixes: [],
+    useCorsProxy: false,    // opt-in: route through api.allorigins.win when direct fetch fails
+    viewMode: "radar",      // "radar" | "map"
+    map: null,
+    aircraftLayer: null,
+    mapMarkers: new Map(),
+    mapQueryCircle: null,
+    mapLimitCircle: null,
+    homeMarker: null,
+  };
+
+  function altitudeVisible(ac) {
+    if (ac.on_ground) return state.activeAltBands.has("ground-5000");
+    if (ac.alt_baro == null || typeof ac.alt_baro !== "number") return true;
+    for (const band of ALT_BANDS) {
+      const upperInclusive = band.id === ALT_BANDS[ALT_BANDS.length - 1].id;
+      if (ac.alt_baro >= band.min && (upperInclusive ? ac.alt_baro <= band.max : ac.alt_baro < band.max)) {
+        return state.activeAltBands.has(band.id);
+      }
+    }
+    return true;
+  }
+
+  function callsignVisible(ac) {
+    if (state.callsignPrefixes.length === 0) return true;
+    const cs = (ac.flight || "").trim().toUpperCase();
+    if (!cs) return false; // no callsign broadcast - can't match a prefix filter
+    return state.callsignPrefixes.some((p) => cs.startsWith(p));
+  }
+
+  function registrationVisible(ac) {
+    if (state.registrationPrefixes.length === 0) return true;
+    const reg = (ac.reg || "").trim().toUpperCase();
+    if (!reg) return false; // no registration broadcast - can't match a prefix filter
+    return state.registrationPrefixes.some((p) => reg.startsWith(p));
+  }
+
+  function isAircraftVisible(ac) {
+    return altitudeVisible(ac) && callsignVisible(ac) && registrationVisible(ac);
+  }
+
+  function parsePrefixListInput(value) {
+    return (value || "")
+      .split(",")
+      .map((s) => s.trim().toUpperCase())
+      .filter((s) => s.length > 0);
+  }
+
+  function applyFiltersAndRender() {
+    const all = Array.from(state.lastAircraftByHex.values());
+    const filtered = all.filter(isAircraftVisible);
+    renderCurrentView(filtered, state.rangeNm, state.lastQueryDistNm);
+    updateSidebar(filtered, all.length);
+  }
+
+  function setStatus(msg, isError) {
+    els.statusMsg.textContent = msg || "";
+    els.statusMsg.classList.toggle("error", !!isError);
+  }
+
+  function saveLastLocation() {
+    const data = {
+      mode: state.mode, icao: state.icao, lat: state.lat, lon: state.lon,
+      rangeNm: state.rangeNm, altBands: Array.from(state.activeAltBands),
+      callsignPrefixes: state.callsignPrefixes, registrationPrefixes: state.registrationPrefixes,
+      useCorsProxy: state.useCorsProxy, viewMode: state.viewMode,
+    };
+    try { localStorage.setItem("plane-radar-last", JSON.stringify(data)); } catch (e) {}
+  }
+
+  function loadLastLocation() {
+    try {
+      const raw = localStorage.getItem("plane-radar-last");
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  // ---------- location setup ----------
+
+  async function goToIcao(icao) {
+    icao = (icao || "").trim().toUpperCase();
+    if (icao.length !== 4) {
+      setStatus("Enter a 4-letter ICAO code, e.g. KRDU", true);
+      return;
+    }
+    setStatus("Looking up " + icao + "...");
+    try {
+      const apt = await getAirportAwaitingExtension(icao);
+      if (!apt) throw new Error(`unknown ICAO code '${icao}' (not in the built-in ~300 major airports, and the extended database wasn't reachable - try lat/lon instead)`);
+      state.mode = "icao";
+      state.icao = icao;
+      state.lat = apt.lat;
+      state.lon = apt.lon;
+      state.locationLabel = apt.icao;
+      setStatus("");
+      restartPolling();
+      saveLastLocation();
+    } catch (err) {
+      setStatus("Airport lookup failed: " + err.message, true);
+    }
+  }
+
+  function goToLatLon(lat, lon, label) {
+    state.mode = "latlon";
+    state.icao = null;
+    state.lat = lat;
+    state.lon = lon;
+    state.locationLabel = label || `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+    setStatus("");
+    restartPolling();
+    saveLastLocation();
+  }
+
+  function goToManualLatLon() {
+    const lat = parseFloat(els.latInput.value);
+    const lon = parseFloat(els.lonInput.value);
+    if (!isFinite(lat) || !isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+      setStatus("Enter valid latitude (-90..90) and longitude (-180..180)", true);
+      return;
+    }
+    els.icaoInput.value = "";
+    goToLatLon(lat, lon, `${lat.toFixed(2)}, ${lon.toFixed(2)}`);
+  }
+
+  function useMyLocation() {
+    if (!navigator.geolocation) {
+      setStatus("Geolocation not supported by this browser", true);
+      return;
+    }
+    setStatus("Requesting location...");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        goToLatLon(pos.coords.latitude, pos.coords.longitude, "MY LOCATION");
+        els.icaoInput.value = "";
+      },
+      (err) => setStatus("Location error: " + err.message, true),
+      { enableHighAccuracy: false, timeout: 10000 }
+    );
+  }
+
+  // ---------- polling ----------
+
+  function restartPolling() {
+    if (state.aircraftTimer) clearInterval(state.aircraftTimer);
+    if (state.weatherTimer) clearInterval(state.weatherTimer);
+    closeDetails();
+    recenterMap(9);
+    refreshAircraft();
+    refreshWeather();
+    state.aircraftTimer = setInterval(refreshAircraft, AIRCRAFT_POLL_MS);
+    state.weatherTimer = setInterval(refreshWeather, WEATHER_POLL_MS);
+  }
+
+  async function refreshAircraft() {
+    if (state.lat == null || state.lon == null) return;
+    try {
+      const { aircraft, viaProxy, queryDistNm, source } = await fetchAircraftRaw(state.lat, state.lon, state.rangeNm);
+      const sourceNote = source === "airplanes.live" ? " (via airplanes.live fallback)" : "";
+      const proxyNote = viaProxy ? " (via proxy)" : "";
+      const limitNote = queryDistNm < state.rangeNm ? ` · data limited to ${queryDistNm}nm` : "";
+      setStatus(`${aircraft.length} aircraft · updated ${new Date().toLocaleTimeString()}${sourceNote}${proxyNote}${limitNote}`);
+      state.lastAircraftByHex = new Map(aircraft.map((ac) => [ac.hex, ac]));
+      state.lastQueryDistNm = queryDistNm;
+      const filtered = aircraft.filter(isAircraftVisible);
+      renderCurrentView(filtered, state.rangeNm, queryDistNm);
+      updateSidebar(filtered, aircraft.length);
+      if (els.routesToggle.checked) queueRouteLookups(filtered);
+      if (state.selectedHex) refreshDetailsLiveFields();
+    } catch (err) {
+      let tip;
+      if (err.corsProxyAttempted) {
+        tip = " — the direct request AND the CORS proxy fallback both failed. The public proxy (allorigins.win) may be down or rate-limited right now; try again shortly, or use the Flask version (app.py) instead.";
+      } else if (state.useCorsProxy) {
+        tip = " — unexpected error with the CORS proxy path enabled; try again, or use the Flask version (app.py) instead.";
+      } else {
+        tip = " — your browser is blocking direct cross-origin requests to both adsb.fi and its airplanes.live fallback. Try checking \"CORS proxy fallback\" above, or use the Flask version (app.py) instead.";
+      }
+      setStatus("Aircraft fetch failed: " + err.message + tip, true);
+    }
+  }
+
+  async function refreshWeather() {
+    if (!els.weatherToggle.checked || state.lat == null) {
+      els.footerWeather.textContent = " ";
+      return;
+    }
+    try {
+      const data = await fetchWeatherRaw(state.lat, state.lon);
+      els.footerWeather.textContent = formatWeather(data);
+    } catch (e) {
+      // decorative only - ignore
+    }
+  }
+
+  function weatherCondLabel(code) {
+    if (code === 0) return "CLR";
+    if (code <= 2) return "FEW";
+    if (code === 3) return "OVC";
+    if (code === 45 || code === 48) return "FOG";
+    if (code >= 51 && code <= 67) return "RAIN";
+    if (code >= 71 && code <= 77) return "SNOW";
+    if (code >= 80 && code <= 82) return "SHWR";
+    if (code >= 95) return "TSTM";
+    return "---";
+  }
+
+  function formatWeather(w) {
+    if (w.temperature_c == null) return " ";
+    const cond = weatherCondLabel(w.weather_code);
+    const t = Math.round(w.temperature_c);
+    const h = Math.round(w.humidity);
+    return `${cond} ${t}°C RH${h}%`;
+  }
+
+  // ---------- route enrichment (throttled, background) ----------
+
+  function queueRouteLookups(aircraftList) {
+    const now = Date.now();
+    for (const ac of aircraftList) {
+      const cs = ac.flight;
+      if (!cs) continue;
+      const cached = state.routeCache.get(cs);
+      if (cached && now - cached.ts < 6 * 3600 * 1000) continue;
+      if (state.routeQueue.includes(cs)) continue;
+      state.routeQueue.push(cs);
+    }
+    processRouteQueue();
+  }
+
+  function processRouteQueue() {
+    if (state.routeQueueBusy || state.routeQueue.length === 0) return;
+    state.routeQueueBusy = true;
+    const cs = state.routeQueue.shift();
+    fetchRoute(cs).finally(() => {
+      state.routeQueueBusy = false;
+      setTimeout(processRouteQueue, ROUTE_QUEUE_DELAY_MS);
+    });
+  }
+
+  function fetchRoute(callsign) {
+    return fetchRouteRaw(callsign).then(async (data) => {
+      // prefer the 3-letter IATA code for the compact radar tag; fall back to
+      // the full 4-letter ICAO code (never truncate it - ICAO codes aren't
+      // "IATA + one extra letter" outside of the continental US)
+      let originShort = data.origin || null;
+      let destShort = data.destination || null;
+      if (data.origin) {
+        const info = await getAirportInfo(data.origin);
+        if (info && info.iata) originShort = info.iata;
+      }
+      if (data.destination) {
+        const info = await getAirportInfo(data.destination);
+        if (info && info.iata) destShort = info.iata;
+      }
+      const entry = {
+        origin: data.origin, destination: data.destination,
+        originShort, destShort, airline: data.airline, ts: Date.now(),
+      };
+      state.routeCache.set(callsign, entry);
+      return entry;
+    }).catch(() => null);
+  }
+
+  async function getAirportInfo(icao) {
+    if (!icao) return null;
+    if (state.airportInfoCache.has(icao)) return state.airportInfoCache.get(icao);
+    const info = await getAirportAwaitingExtension(icao);
+    state.airportInfoCache.set(icao, info);
+    return info;
+  }
+
+  function routeTag(ac) {
+    const cached = state.routeCache.get(ac.flight);
+    if (cached && cached.originShort && cached.destShort) {
+      return `${cached.originShort}-${cached.destShort}`;
+    }
+    return ac.flight || ac.reg || ac.hex || "?????";
+  }
+
+  // ---------- sidebar table ----------
+
+  function updateSidebar(aircraftList, totalCount) {
+    els.aircraftCount.textContent = (totalCount != null && totalCount !== aircraftList.length)
+      ? `(${aircraftList.length} of ${totalCount})`
+      : `(${aircraftList.length})`;
+    els.aircraftBody.innerHTML = "";
+    for (const ac of aircraftList) {
+      const tr = document.createElement("tr");
+      tr.dataset.hex = ac.hex;
+      if (ac.hex === state.selectedHex) tr.classList.add("selected");
+      const alt = ac.on_ground ? "GND" : (ac.alt_baro != null ? `${ac.alt_baro} ft` : "--");
+      tr.innerHTML = `
+        <td class="flight-cell">${ac.flight || ac.reg || ac.hex}</td>
+        <td class="type-cell">${ac.type || "--"}</td>
+        <td>${alt}</td>
+        <td>${ac.distance_nm.toFixed(1)} nm</td>
+        <td>${Math.round(ac.bearing)}°</td>
+      `;
+      tr.addEventListener("click", () => selectAircraft(ac));
+      els.aircraftBody.appendChild(tr);
+    }
+  }
+
+  // ---------- radar drawing ----------
+
+  function drawRadar(aircraftList, rangeNm, queryDistNm) {
+    const size = CANVAS_SIZE;
+    const cx = size / 2, cy = size / 2;
+    const R = size / 2 - size * 0.08;
+
+    state.lastMarkers = [];
+
+    ctx.clearRect(0, 0, size, size);
+    ctx.fillStyle = COLORS.bg;
+    ctx.fillRect(0, 0, size, size);
+
+    ctx.strokeStyle = COLORS.ring;
+    ctx.lineWidth = 1.5;
+    for (let i = 1; i <= 4; i++) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, (R * i) / 4, 0, Math.PI * 2);
+      ctx.globalAlpha = 0.55;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = COLORS.crosshair;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy);
+    ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R);
+    ctx.stroke();
+
+    ctx.fillStyle = COLORS.text;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = COLORS.text;
+    ctx.font = `bold ${Math.round(size * 0.032)}px monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("N", cx, cy - R - size * 0.03);
+    ctx.fillText("S", cx, cy + R + size * 0.03);
+    ctx.textAlign = "left";
+    ctx.fillText("E", cx + R + size * 0.015, cy);
+    ctx.textAlign = "right";
+    ctx.fillText("W", cx - R - size * 0.015, cy);
+
+    ctx.fillStyle = COLORS.dim;
+    ctx.font = `${Math.round(size * 0.024)}px monospace`;
+    ctx.textAlign = "left";
+    ctx.fillText(`${rangeNm}nm`, cx + (R * 3) / 4 + 4, cy - 4);
+
+    // adsb.fi data-limit boundary: when the display range is zoomed out
+    // further than adsb.fi actually queried, draw exactly where real data
+    // stops so an empty outer area doesn't look like a bug.
+    if (queryDistNm != null && queryDistNm < rangeNm) {
+      const limitR = (queryDistNm / rangeNm) * R;
+      ctx.save();
+      ctx.strokeStyle = COLORS.limitRing;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 5]);
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.arc(cx, cy, limitR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.fillStyle = COLORS.limitRing;
+      ctx.font = `${Math.round(size * 0.022)}px monospace`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      const labelAngle = -Math.PI / 4; // northeast spoke, away from the east range label
+      ctx.fillText(
+        `data limit: ${queryDistNm}nm`,
+        cx + limitR * Math.sin(labelAngle) + 6,
+        cy - limitR * Math.cos(labelAngle)
+      );
+    }
+
+    ctx.fillStyle = COLORS.home;
+    ctx.font = `bold ${Math.round(size * 0.026)}px monospace`;
+    ctx.textAlign = "center";
+    ctx.fillText(state.locationLabel, cx, cy + size * 0.06);
+
+    for (const ac of aircraftList) {
+      drawAircraft(ac, cx, cy, R, rangeNm, size);
+    }
+  }
+
+  function drawAircraft(ac, cx, cy, R, rangeNm, size) {
+    const bearingRad = (ac.bearing * Math.PI) / 180;
+    const clamped = Math.min(ac.distance_nm, rangeNm);
+    const rPx = (clamped / rangeNm) * R;
+    const x = cx + rPx * Math.sin(bearingRad);
+    const y = cy - rPx * Math.cos(bearingRad);
+
+    state.lastMarkers.push({ x, y, ac });
+
+    const isSelected = ac.hex === state.selectedHex;
+
+    if (isSelected) {
+      ctx.strokeStyle = COLORS.selected;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.024, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    if (ac.distance_nm > rangeNm) {
+      ctx.fillStyle = COLORS.heading;
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+
+    const trackRad = ((ac.track || 0) * Math.PI) / 180;
+    const color = ac.on_ground ? COLORS.headingGround : COLORS.heading;
+
+    if (!ac.on_ground && ac.gs) {
+      const vecLen = Math.min(size * 0.05, Math.max(size * 0.015, (ac.gs / 500) * size * 0.05));
+      ctx.strokeStyle = COLORS.vector;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + vecLen * Math.sin(trackRad), y - vecLen * Math.cos(trackRad));
+      ctx.stroke();
+    }
+
+    const s = size * 0.014;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(trackRad);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 1.6);
+    ctx.lineTo(s, s);
+    ctx.lineTo(-s, s);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    const west = x < cx;
+    ctx.textAlign = west ? "left" : "right";
+    const tx = x + (west ? size * 0.018 : -size * 0.018);
+    let ty = y - size * 0.02;
+    const lineH = size * 0.024;
+    const fontSize = Math.round(size * 0.02);
+
+    ctx.font = `${fontSize}px monospace`;
+    ctx.fillStyle = isSelected ? COLORS.selected : COLORS.callsign;
+    ctx.fillText(routeTag(ac), tx, ty);
+    ty += lineH;
+
+    if (ac.type) {
+      ctx.fillStyle = COLORS.type;
+      ctx.fillText(ac.type, tx, ty);
+      ty += lineH;
+    }
+
+    ctx.fillStyle = COLORS.alt;
+    const altText = ac.on_ground ? "GND" : (ac.alt_baro != null ? `${ac.alt_baro} ft` : "");
+    if (altText) ctx.fillText(altText, tx, ty);
+  }
+
+  // ---------- map view (Leaflet / OpenStreetMap via CARTO dark tiles) ----------
+
+  function initMap() {
+    if (state.map) return state.map;
+    const map = L.map(els.mapBezel.querySelector("#mapView"), {
+      zoomControl: true,
+      attributionControl: true,
+    }).setView([state.lat || 0, state.lon || 0], 8);
+    L.tileLayer(MAP_TILE_URL, {
+      attribution: MAP_ATTRIBUTION,
+      subdomains: "abcd",
+      maxZoom: 20,
+    }).addTo(map);
+    state.map = map;
+    state.aircraftLayer = L.layerGroup().addTo(map);
+    return map;
+  }
+
+  function aircraftDivIcon(ac, isSelected) {
+    const color = isSelected ? COLORS.selected : (ac.on_ground ? COLORS.headingGround : COLORS.heading);
+    const rot = ac.track || 0;
+    const html = `<svg width="20" height="20" viewBox="-10 -10 20 20" style="overflow:visible;transform:rotate(${rot}deg);">
+      <polygon points="0,-8 5,6 0,3 -5,6" fill="${color}" stroke="#000" stroke-width="0.6"></polygon>
+    </svg>`;
+    return L.divIcon({ html, className: "plane-divicon", iconSize: [20, 20], iconAnchor: [10, 10] });
+  }
+
+  function aircraftTooltipHtml(ac, isSelected) {
+    const altText = ac.on_ground ? "GND" : (ac.alt_baro != null ? `${ac.alt_baro} ft` : "");
+    return `<div class="${isSelected ? "plane-tip-selected" : ""}">
+      <div class="plane-tip-call">${routeTag(ac)}</div>
+      ${ac.type ? `<div class="plane-tip-type">${ac.type}</div>` : ""}
+      ${altText ? `<div class="plane-tip-alt">${altText}</div>` : ""}
+    </div>`;
+  }
+
+  function renderMap(aircraftList, rangeNm, queryDistNm) {
+    if (state.lat == null || state.lon == null) return;
+    const map = initMap();
+    const center = [state.lat, state.lon];
+
+    // home marker
+    if (!state.homeMarker) {
+      state.homeMarker = L.circleMarker(center, {
+        radius: 5, color: COLORS.home, weight: 2, fillColor: COLORS.home, fillOpacity: 1,
+      }).addTo(map);
+    } else {
+      state.homeMarker.setLatLng(center);
+    }
+    state.homeMarker.unbindTooltip().bindTooltip(state.locationLabel, {
+      permanent: true, direction: "top", className: "home-tooltip", offset: [0, -6],
+    });
+
+    // query-radius circle
+    const queryMeters = rangeNm * NM_TO_M;
+    if (!state.mapQueryCircle) {
+      state.mapQueryCircle = L.circle(center, {
+        radius: queryMeters, color: COLORS.ring, weight: 1.5, fillOpacity: 0.03,
+      }).addTo(map);
+    } else {
+      state.mapQueryCircle.setLatLng(center).setRadius(queryMeters);
+    }
+
+    // adsb.fi data-limit boundary, only when it's smaller than the display range
+    if (queryDistNm != null && queryDistNm < rangeNm) {
+      const limitMeters = queryDistNm * NM_TO_M;
+      if (!state.mapLimitCircle) {
+        state.mapLimitCircle = L.circle(center, {
+          radius: limitMeters, color: COLORS.limitRing, weight: 1.5, dashArray: "6 5", fillOpacity: 0,
+        }).addTo(map);
+      } else {
+        state.mapLimitCircle.setLatLng(center).setRadius(limitMeters).addTo(map);
+      }
+    } else if (state.mapLimitCircle) {
+      map.removeLayer(state.mapLimitCircle);
+    }
+
+    // aircraft markers - update in place where possible for smooth movement
+    const seenHex = new Set();
+    for (const ac of aircraftList) {
+      if (ac.lat == null || ac.lon == null) continue;
+      seenHex.add(ac.hex);
+      const isSelected = ac.hex === state.selectedHex;
+      const latlng = [ac.lat, ac.lon];
+      let marker = state.mapMarkers.get(ac.hex);
+      if (!marker) {
+        marker = L.marker(latlng, { icon: aircraftDivIcon(ac, isSelected) });
+        marker.on("click", () => selectAircraft(ac));
+        marker.addTo(state.aircraftLayer);
+        state.mapMarkers.set(ac.hex, marker);
+      } else {
+        marker.setLatLng(latlng);
+        marker.setIcon(aircraftDivIcon(ac, isSelected));
+      }
+      marker.unbindTooltip().bindTooltip(aircraftTooltipHtml(ac, isSelected), {
+        permanent: true, direction: "right", offset: [8, 0], className: "plane-tooltip",
+      });
+    }
+
+    // drop markers for aircraft no longer in the filtered list
+    for (const [hex, marker] of state.mapMarkers) {
+      if (!seenHex.has(hex)) {
+        state.aircraftLayer.removeLayer(marker);
+        state.mapMarkers.delete(hex);
+      }
+    }
+  }
+
+  function recenterMap(zoom) {
+    if (state.map && state.lat != null && state.lon != null) {
+      state.map.setView([state.lat, state.lon], zoom != null ? zoom : state.map.getZoom());
+    }
+  }
+
+  function renderCurrentView(aircraftList, rangeNm, queryDistNm) {
+    if (state.viewMode === "map") {
+      renderMap(aircraftList, rangeNm, queryDistNm);
+    } else {
+      drawRadar(aircraftList, rangeNm, queryDistNm);
+    }
+  }
+
+  function setViewMode(mode) {
+    state.viewMode = mode;
+    els.viewRadarBtn.classList.toggle("active", mode === "radar");
+    els.viewMapBtn.classList.toggle("active", mode === "map");
+    els.radarBezel.classList.toggle("hidden", mode !== "radar");
+    els.mapBezel.classList.toggle("hidden", mode !== "map");
+    saveLastLocation();
+
+    if (mode === "map") {
+      initMap();
+      requestAnimationFrame(() => {
+        state.map.invalidateSize();
+        applyFiltersAndRender();
+      });
+    } else {
+      applyFiltersAndRender();
+    }
+  }
+
+  els.viewRadarBtn.addEventListener("click", () => setViewMode("radar"));
+  els.viewMapBtn.addEventListener("click", () => setViewMode("map"));
+
+  // ---------- zoom ----------
+
+  let rangeRefetchTimer = null;
+
+  function clampRange(r) {
+    return Math.min(MAX_RANGE_NM, Math.max(MIN_RANGE_NM, r));
+  }
+
+  function niceRange(r) {
+    return r < 10 ? Math.round(r * 2) / 2 : Math.round(r);
+  }
+
+  function setRange(newRange) {
+    const clamped = niceRange(clampRange(newRange));
+    if (clamped === state.rangeNm) return;
+    state.rangeNm = clamped;
+    els.rangeValue.textContent = `${state.rangeNm} nm`;
+    if (state.lastAircraftByHex.size) applyFiltersAndRender();
+    saveLastLocation();
+    clearTimeout(rangeRefetchTimer);
+    rangeRefetchTimer = setTimeout(refreshAircraft, RANGE_REFETCH_DEBOUNCE_MS);
+  }
+
+  function zoomBy(factor) {
+    setRange(state.rangeNm * factor);
+  }
+
+  els.canvas.addEventListener("wheel", (evt) => {
+    evt.preventDefault();
+    zoomBy(evt.deltaY < 0 ? 0.85 : 1.18);
+  }, { passive: false });
+
+  els.zoomInBtn.addEventListener("click", () => zoomBy(0.75));
+  els.zoomOutBtn.addEventListener("click", () => zoomBy(1.35));
+
+  function touchDist(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.hypot(dx, dy);
+  }
+
+  let pinchStartDist = null;
+  let pinchStartRange = null;
+
+  els.canvas.addEventListener("touchstart", (evt) => {
+    if (evt.touches.length === 2) {
+      pinchStartDist = touchDist(evt.touches);
+      pinchStartRange = state.rangeNm;
+    }
+  }, { passive: true });
+
+  els.canvas.addEventListener("touchmove", (evt) => {
+    if (evt.touches.length === 2 && pinchStartDist) {
+      evt.preventDefault();
+      const d = touchDist(evt.touches);
+      setRange(pinchStartRange * (pinchStartDist / d));
+    }
+  }, { passive: false });
+
+  els.canvas.addEventListener("touchend", (evt) => {
+    if (evt.touches.length < 2) pinchStartDist = null;
+  });
+
+  // ---------- altitude filter ----------
+
+  els.altFilterBtn.addEventListener("click", (evt) => {
+    evt.stopPropagation();
+    els.altFilterMenu.classList.toggle("hidden");
+  });
+
+  document.addEventListener("click", (evt) => {
+    if (!els.altFilterMenu.classList.contains("hidden") && !els.altFilterMenu.contains(evt.target) && evt.target !== els.altFilterBtn) {
+      els.altFilterMenu.classList.add("hidden");
+    }
+  });
+
+  function altBandCheckboxes() {
+    return Array.from(els.altFilterMenu.querySelectorAll("input[data-band]"));
+  }
+
+  function onAltFilterChange() {
+    state.activeAltBands = new Set(
+      altBandCheckboxes().filter((cb) => cb.checked).map((cb) => cb.dataset.band)
+    );
+    saveLastLocation();
+    applyFiltersAndRender();
+  }
+
+  for (const cb of altBandCheckboxes()) {
+    cb.addEventListener("change", onAltFilterChange);
+  }
+
+  els.altFilterAll.addEventListener("click", () => {
+    for (const cb of altBandCheckboxes()) cb.checked = true;
+    onAltFilterChange();
+  });
+
+  els.altFilterNone.addEventListener("click", () => {
+    for (const cb of altBandCheckboxes()) cb.checked = false;
+    onAltFilterChange();
+  });
+
+  // ---------- callsign / registration filters ----------
+
+  function onCallsignFilterChange() {
+    state.callsignPrefixes = parsePrefixListInput(els.callsignFilter.value);
+    saveLastLocation();
+    applyFiltersAndRender();
+  }
+
+  function onRegistrationFilterChange() {
+    state.registrationPrefixes = parsePrefixListInput(els.registrationFilter.value);
+    saveLastLocation();
+    applyFiltersAndRender();
+  }
+
+  els.callsignFilter.addEventListener("input", onCallsignFilterChange);
+  els.registrationFilter.addEventListener("input", onRegistrationFilterChange);
+
+  // ---------- click-to-select ----------
+
+  function canvasEventToLogicalXY(evt) {
+    const rect = els.canvas.getBoundingClientRect();
+    const scaleX = els.canvas.width / rect.width;
+    const scaleY = els.canvas.height / rect.height;
+    return {
+      x: (evt.clientX - rect.left) * scaleX,
+      y: (evt.clientY - rect.top) * scaleY,
+    };
+  }
+
+  els.canvas.addEventListener("click", (evt) => {
+    const { x, y } = canvasEventToLogicalXY(evt);
+    let best = null, bestDist = Infinity;
+    for (const m of state.lastMarkers) {
+      const d = Math.hypot(m.x - x, m.y - y);
+      if (d < bestDist && d < HIT_RADIUS_PX) { bestDist = d; best = m; }
+    }
+    if (best) selectAircraft(best.ac);
+  });
+
+  els.detailsClose.addEventListener("click", closeDetails);
+
+  function closeDetails() {
+    state.selectedHex = null;
+    els.detailsPanel.classList.add("hidden");
+    for (const tr of els.aircraftBody.querySelectorAll("tr.selected")) tr.classList.remove("selected");
+  }
+
+  function fmtAlt(ac) {
+    if (ac.on_ground) return "On ground";
+    if (ac.alt_baro == null) return "--";
+    return `${ac.alt_baro.toLocaleString()} ft`;
+  }
+
+  function fmtGs(ac) {
+    return ac.gs != null ? `${Math.round(ac.gs)} kt` : "--";
+  }
+
+  function fmtTrack(ac) {
+    return ac.track != null ? `${Math.round(ac.track)}°` : "--";
+  }
+
+  function fmtDist(ac) {
+    return `${ac.distance_nm.toFixed(1)} nm @ ${Math.round(ac.bearing)}°`;
+  }
+
+  function airportLabel(info, icao) {
+    if (!info) return icao || "?";
+    return `${icao} · ${info.name}`;
+  }
+
+  function selectAircraft(ac) {
+    state.selectedHex = ac.hex;
+    els.detailsPanel.classList.remove("hidden");
+
+    for (const tr of els.aircraftBody.querySelectorAll("tr")) {
+      tr.classList.toggle("selected", tr.dataset.hex === ac.hex);
+    }
+
+    renderDetailsStatic(ac);
+    populateRoute(ac);
+
+    if (state.lastAircraftByHex.size) applyFiltersAndRender();
+  }
+
+  function renderDetailsStatic(ac) {
+    const title = ac.flight || ac.reg || ac.hex;
+    els.detailsTitle.textContent = title;
+    els.detailsType.textContent = ac.type ? `${ac.type}${ac.desc ? " — " + ac.desc : ""}` : "--";
+    els.detailsReg.textContent = ac.reg || "--";
+    els.detailsAlt.textContent = fmtAlt(ac);
+    els.detailsGs.textContent = fmtGs(ac);
+    els.detailsTrack.textContent = fmtTrack(ac);
+    els.detailsDist.textContent = fmtDist(ac);
+    els.detailsSquawk.textContent = ac.squawk || "--";
+  }
+
+  function refreshDetailsLiveFields() {
+    const ac = state.lastAircraftByHex.get(state.selectedHex);
+    if (!ac) {
+      els.detailsAlt.textContent += " (last known)";
+      return;
+    }
+    els.detailsAlt.textContent = fmtAlt(ac);
+    els.detailsGs.textContent = fmtGs(ac);
+    els.detailsTrack.textContent = fmtTrack(ac);
+    els.detailsDist.textContent = fmtDist(ac);
+    els.detailsSquawk.textContent = ac.squawk || "--";
+  }
+
+  async function populateRoute(ac) {
+    if (!ac.flight) {
+      els.detailsRoute.textContent = "No callsign broadcast";
+      return;
+    }
+    els.detailsRoute.textContent = "Looking up...";
+    let entry = state.routeCache.get(ac.flight);
+    if (!entry || Date.now() - entry.ts > 6 * 3600 * 1000) {
+      entry = await fetchRoute(ac.flight);
+    }
+    if (state.selectedHex !== ac.hex) return;
+
+    if (!entry || !entry.origin || !entry.destination) {
+      els.detailsRoute.textContent = "No route data";
+      return;
+    }
+    const [originInfo, destInfo] = await Promise.all([
+      getAirportInfo(entry.origin),
+      getAirportInfo(entry.destination),
+    ]);
+    if (state.selectedHex !== ac.hex) return;
+    const originLabel = airportLabel(originInfo, entry.origin);
+    const destLabel = airportLabel(destInfo, entry.destination);
+    els.detailsRoute.innerHTML = `${originLabel}<br>&rarr; ${destLabel}`;
+  }
+
+  // ---------- clock ----------
+
+  function tickClock() {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const mon = now.toLocaleString("en-US", { month: "short" }).toUpperCase();
+    els.footerTime.textContent = `${hh}:${mm} ${day} ${mon}`;
+    els.footerLoc.textContent = state.locationLabel || "--";
+  }
+  setInterval(tickClock, 1000);
+  tickClock();
+
+  // ---------- wiring ----------
+
+  els.goBtn.addEventListener("click", () => goToIcao(els.icaoInput.value));
+  els.icaoInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") goToIcao(els.icaoInput.value);
+  });
+  els.latLonGoBtn.addEventListener("click", goToManualLatLon);
+  els.lonInput.addEventListener("keydown", (e) => { if (e.key === "Enter") goToManualLatLon(); });
+  els.latInput.addEventListener("keydown", (e) => { if (e.key === "Enter") goToManualLatLon(); });
+  els.geoBtn.addEventListener("click", useMyLocation);
+  els.weatherToggle.addEventListener("change", refreshWeather);
+  els.corsProxyToggle.addEventListener("change", () => {
+    state.useCorsProxy = els.corsProxyToggle.checked;
+    saveLastLocation();
+  });
+
+  // initial state: restore last session, else default to KRDU at DEFAULT_RANGE_NM
+  const last = loadLastLocation();
+  if (last && last.useCorsProxy) {
+    state.useCorsProxy = true;
+    els.corsProxyToggle.checked = true;
+  }
+  if (last && last.rangeNm) state.rangeNm = niceRange(clampRange(last.rangeNm));
+  els.rangeValue.textContent = `${state.rangeNm} nm`;
+
+  if (last && Array.isArray(last.altBands)) {
+    state.activeAltBands = new Set(last.altBands);
+    for (const cb of altBandCheckboxes()) {
+      cb.checked = state.activeAltBands.has(cb.dataset.band);
+    }
+  }
+
+  if (last && Array.isArray(last.callsignPrefixes) && last.callsignPrefixes.length) {
+    state.callsignPrefixes = last.callsignPrefixes;
+    els.callsignFilter.value = last.callsignPrefixes.join(", ");
+  }
+
+  if (last && Array.isArray(last.registrationPrefixes) && last.registrationPrefixes.length) {
+    state.registrationPrefixes = last.registrationPrefixes;
+    els.registrationFilter.value = last.registrationPrefixes.join(", ");
+  }
+
+  if (last && last.viewMode === "map") {
+    setViewMode("map");
+  }
+
+  if (last && last.mode === "icao" && last.icao) {
+    els.icaoInput.value = last.icao;
+    goToIcao(last.icao);
+  } else if (last && last.mode === "latlon" && last.lat != null) {
+    goToLatLon(last.lat, last.lon, "MY LOCATION");
+  } else {
+    els.icaoInput.value = "KRDU";
+    goToIcao("KRDU");
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plane Radar</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="controls">
+      <div class="control-group">
+        <label for="icaoInput">Airport ICAO</label>
+        <input id="icaoInput" type="text" maxlength="4" placeholder="KRDU" autocomplete="off" spellcheck="false">
+      </div>
+      <button id="goBtn">Go</button>
+      <button id="geoBtn" title="Center on my current location">Use my location</button>
+      <div class="control-group zoom-group">
+        <label>Range</label>
+        <button id="zoomOutBtn" class="zoom-btn" title="Zoom out">&minus;</button>
+        <span id="rangeValue">25 nm</span>
+        <button id="zoomInBtn" class="zoom-btn" title="Zoom in">&plus;</button>
+        <span class="zoom-hint">scroll / pinch the radar to zoom</span>
+      </div>
+      <label class="toggle"><input id="routesToggle" type="checkbox" checked> routes</label>
+      <label class="toggle"><input id="weatherToggle" type="checkbox" checked> weather</label>
+      <div class="control-group">
+        <label for="callsignFilter">Callsign</label>
+        <input id="callsignFilter" class="callsign-input" type="text" placeholder="NJE, AF" autocomplete="off" spellcheck="false" title="Comma-separated callsign prefixes, e.g. NJE, AF">
+      </div>
+      <div class="control-group">
+        <label for="registrationFilter">Registration</label>
+        <input id="registrationFilter" class="callsign-input" type="text" placeholder="N, G-" autocomplete="off" spellcheck="false" title="Comma-separated registration prefixes, e.g. N, G-">
+      </div>
+      <div class="control-group alt-filter">
+        <button id="altFilterBtn" type="button">Altitude &#9662;</button>
+        <div id="altFilterMenu" class="alt-filter-menu hidden">
+          <label><input type="checkbox" data-band="ground-5000" checked> Ground &ndash; 5,000 ft</label>
+          <label><input type="checkbox" data-band="5000-10000" checked> 5,000 &ndash; 10,000 ft</label>
+          <label><input type="checkbox" data-band="10000-20000" checked> 10,000 &ndash; 20,000 ft</label>
+          <label><input type="checkbox" data-band="20000-30000" checked> 20,000 &ndash; 30,000 ft</label>
+          <label><input type="checkbox" data-band="30000-40000" checked> 30,000 &ndash; 40,000 ft</label>
+          <label><input type="checkbox" data-band="40000-50000" checked> 40,000 &ndash; 50,000 ft</label>
+          <div class="alt-filter-actions">
+            <button id="altFilterAll" type="button">All</button>
+            <button id="altFilterNone" type="button">None</button>
+          </div>
+        </div>
+      </div>
+      <span id="statusMsg" class="status"></span>
+    </header>
+
+    <main class="layout">
+      <div class="radar-wrap">
+        <div class="view-toggle">
+          <button id="viewRadarBtn" class="view-btn active" type="button">Radar</button>
+          <button id="viewMapBtn" class="view-btn" type="button">Map</button>
+        </div>
+        <div class="bezel" id="radarBezel">
+          <canvas id="radar" width="640" height="640"></canvas>
+        </div>
+        <div class="map-bezel hidden" id="mapBezel">
+          <div id="mapView"></div>
+        </div>
+        <div class="footer">
+          <div id="footerLoc" class="footer-loc">--</div>
+          <div id="footerWeather" class="footer-weather">&nbsp;</div>
+          <div id="footerTime" class="footer-time">--:-- -- ---</div>
+        </div>
+      </div>
+
+      <aside class="sidebar">
+        <div id="detailsPanel" class="details-panel hidden">
+          <div class="details-header">
+            <h2 id="detailsTitle">--</h2>
+            <button id="detailsClose" class="close-btn" title="Close">&times;</button>
+          </div>
+          <div class="details-body">
+            <div class="details-row"><span class="details-label">Type</span><span id="detailsType">--</span></div>
+            <div class="details-row"><span class="details-label">Registration</span><span id="detailsReg">--</span></div>
+            <div class="details-row"><span class="details-label">Route</span><span id="detailsRoute">--</span></div>
+            <div class="details-row"><span class="details-label">Altitude</span><span id="detailsAlt">--</span></div>
+            <div class="details-row"><span class="details-label">Ground speed</span><span id="detailsGs">--</span></div>
+            <div class="details-row"><span class="details-label">Heading</span><span id="detailsTrack">--</span></div>
+            <div class="details-row"><span class="details-label">Distance / Brg</span><span id="detailsDist">--</span></div>
+            <div class="details-row"><span class="details-label">Squawk</span><span id="detailsSquawk">--</span></div>
+          </div>
+        </div>
+
+        <h2>Aircraft <span id="aircraftCount">(0)</span></h2>
+        <table id="aircraftTable">
+          <thead>
+            <tr><th>Flight</th><th>Type</th><th>Alt</th><th>Dist</th><th>Brg</th></tr>
+          </thead>
+          <tbody id="aircraftBody"></tbody>
+        </table>
+      </aside>
+    </main>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="/static/radar.js"></script>
+</body>
+</html>
