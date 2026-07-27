@@ -2,7 +2,7 @@
 
 A local ADS-B radar, styled after [ironicbadger's ESP32-Plane-Radar](https://github.com/ironicbadger/ESP32-Plane-Radar) round display. Comes in two forms:
 
-- **`app.py`** — a small Flask web app, opened at `localhost` in a browser. Recommended: it proxies the three upstream APIs server-side, so it always works regardless of any single browser's cross-origin policy.
+- **`app.py`** — a small Flask web app, opened at `localhost` in a browser. Recommended: it proxies the three upstream APIs server-side, so it always works regardless of any single browser's cross-origin policy. It's a single file — the page markup, CSS, and JS are embedded in it directly (no `templates/`/`static/` folders to carry along); copy just `app.py` and `requirements.txt` to another machine and it runs.
 - **`standalone.html`** — a single self-contained HTML file with everything inlined. No install, no server: just open it in a browser (double-click it, or drag it into a tab). It talks to adsb.fi, airplanes.live, adsbdb, and Open-Meteo *directly from the browser*. adsb.fi is confirmed to **not** send CORS headers (verified: it returns HTTP 200 but no `Access-Control-Allow-Origin`, so browsers refuse to hand the response to JS), so direct requests will fail there; if adsb.fi's request fails outright, the same query is retried against airplanes.live before giving up. There's an off-by-default "CORS proxy fallback" checkbox in the header - turning it on retries blocked requests through the public proxy [api.allorigins.win](https://allorigins.win/), at the cost of routing your queried lat/lon/range through that third-party server (not under our control, no privacy or uptime guarantees, purely opt-in). Airport ICAO lookups have a ~300-airport list of major world airports built directly into the file instead (zero network dependency - KRDU, LEBL, etc. resolve instantly), with a best-effort background fetch of the full OurAirports database for broader coverage. For guaranteed reliability with no third-party proxy involved, use the Flask version, which proxies adsb.fi/adsbdb server-side.
 
 Feature set is the same in both: ICAO / lat-lon / "use my location" input, 1-3000 nm zoom (scroll, pinch, or +/- buttons), an altitude band filter, click-to-select aircraft details, a weather/clock footer, and a **Radar / Map view toggle** (round radar display, or a real OpenStreetMap-based map).
@@ -26,7 +26,7 @@ Then open **http://localhost:8765**.
 - The `routes` toggle enriches callsigns into origin-destination tags (e.g. `BOS-IND`) via adsbdb; `weather` shows current conditions in the footer via Open-Meteo.
 - **Radar / Map toggle**: "Radar" is the original round ESP32-style display. "Map" plants the same aircraft on a real OpenStreetMap-based map (dark tiles via CARTO, data &copy; OpenStreetMap contributors) with a solid ring showing the current query radius and, when applicable, the dashed 250 nm data-limit ring. The map is freely pannable/zoomable on its own - that doesn't refetch data. The underlying query stays anchored to your chosen center until you re-center (new ICAO, lat/lon, or "use my location"), which is when the map view also recenters and rezooms. Your last-used view is remembered between sessions.
 
-First run downloads and caches a ~10 MB airport database (`data/airports.json`) so ICAO lookups work offline afterward.
+First run downloads and caches a ~10 MB airport database into a `data/` folder next to `app.py`, so ICAO lookups work offline afterward. That folder is created automatically and doesn't need to be copied between machines either — a fresh `data/` gets rebuilt on first run wherever `app.py` is launched (just needs internet access that one time).
 
 ## Standalone version
 
@@ -34,8 +34,8 @@ Just open `standalone.html` in a browser — no `pip install`, no server. It's a
 
 ## How it works
 
-- `app.py` — Flask backend. Resolves ICAO → lat/lon, queries adsb.fi for aircraft within range (falling back to airplanes.live if adsb.fi itself fails to respond), computes bearing/distance from your chosen center, and proxies adsbdb route lookups and Open-Meteo weather. All upstream calls are cached server-side to stay within the public rate limits (1 req/s).
-- `templates/index.html` + `static/style.css` + `static/radar.js` — the round radar UI: canvas-drawn rings/compass, aircraft as heading triangles with a speed vector, tags for route/type/altitude, and a footer with location, weather, and clock.
+- `app.py` — Flask backend. Resolves ICAO → lat/lon, queries adsb.fi for aircraft within range (falling back to airplanes.live if adsb.fi itself fails to respond), computes bearing/distance from your chosen center, and proxies adsbdb route lookups and Open-Meteo weather. All upstream calls are cached server-side to stay within the public rate limits (1 req/s). The round radar UI itself (canvas-drawn rings/compass, aircraft as heading triangles with a speed vector, the map view, filters, footer) is embedded in the same file as the `INDEX_HTML`/`STYLE_CSS`/`RADAR_JS` constants, served directly instead of through `render_template`/a `static/` folder.
+- If you're editing the UI: those constants are the source of truth for the Flask version. `standalone.html` has its own copy of the same UI/logic (it has to be self-contained for the browser-only version), so a UI change generally needs to land in both places.
 
 ## Data sources & terms
 
