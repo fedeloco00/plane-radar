@@ -730,10 +730,11 @@ canvas#radar { cursor: pointer; }
   background: #0e1f16;
   border: 1px solid var(--green-dim);
   color: var(--green);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  padding: 3px 8px;
+  padding: 7px 12px;
+  min-height: 30px;
   border-radius: 4px;
   cursor: pointer;
 }
@@ -1271,6 +1272,7 @@ RADAR_JS = r"""(() => {
     state.trackedTraffic.lastSeenAt = Date.now();
 
     updateTrackButton();
+    setStatus(`Now tracking ${state.trackedTraffic.callsign} - recentering every update`);
     recenterSilently(ac.lat, ac.lon, `TRACKING: ${state.trackedTraffic.callsign}`);
   }
 
@@ -1378,6 +1380,11 @@ RADAR_JS = r"""(() => {
           state.lat = tAc.lat;
           state.lon = tAc.lon;
           state.locationLabel = `TRACKING: ${state.trackedTraffic.callsign}`;
+          // Kept in the status line on every poll (not just when it starts)
+          // so it's obvious tracking is active even if the button flip was
+          // missed - unlike own-ship mode, there's no other persistent UI
+          // change (no disabled controls, no new panel) to signal this.
+          trackedNote = ` · tracking ${state.trackedTraffic.callsign}`;
         } else if (state.trackedTraffic.lastSeenAt) {
           const staleSec = Math.round((Date.now() - state.trackedTraffic.lastSeenAt) / 1000);
           trackedNote = ` · tracked traffic signal lost ${staleSec}s ago, showing last known position`;
@@ -1835,13 +1842,17 @@ RADAR_JS = r"""(() => {
       let marker = state.mapMarkers.get(ac.hex);
       if (!marker) {
         marker = L.marker(latlng, { icon: aircraftDivIcon(ac, isSelected) });
-        marker.on("click", () => selectAircraft(ac));
         marker.addTo(state.aircraftLayer);
         state.mapMarkers.set(ac.hex, marker);
       } else {
         marker.setLatLng(latlng);
         marker.setIcon(aircraftDivIcon(ac, isSelected));
       }
+      // Re-bind every render (not just on creation) so the click handler
+      // always closes over this poll's fresh `ac` - otherwise a marker that
+      // sticks around across polls would keep selecting/tracking stale data
+      // from whenever it first appeared.
+      marker.off("click").on("click", () => selectAircraft(ac));
       marker.unbindTooltip().bindTooltip(aircraftTooltipHtml(ac, isSelected), {
         permanent: true, direction: "right", offset: [8, 0], className: "plane-tooltip",
       });
