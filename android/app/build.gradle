@@ -38,4 +38,7 @@ dependencies {
     implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.activity:activity-ktx:1.9.0'
+    // Minimal embedded HTTP server so the app can also serve the radar to
+    // other devices on the same WiFi network (see LanWebServer.kt).
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
 }

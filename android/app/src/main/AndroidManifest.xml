@@ -5,10 +5,17 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- usesCleartextTraffic: the WebView loads the app from our own embedded
+         plain-HTTP server at http://127.0.0.1:8765 (see LanWebServer.kt /
+         MainActivity.kt) instead of file://, so both this device and other
+         devices on the same WiFi run from identical URLs. Android blocks
+         cleartext (non-TLS) requests by default from targetSdk 28+, so this
+         opt-in is required for that local loopback request to succeed. -->
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
-        android:theme="@style/Theme.PlaneRadar">
+        android:theme="@style/Theme.PlaneRadar"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"

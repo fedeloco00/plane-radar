@@ -151,6 +151,12 @@ INDEX_HTML = r"""<!DOCTYPE html>
       </div>
       <button id="goBtn">Go</button>
       <button id="geoBtn" title="Center on my current location">Use my location</button>
+      <div class="control-group own-ship-group">
+        <label for="ownCallsignInput">Own ship</label>
+        <input id="ownCallsignInput" class="callsign-input" type="text" placeholder="Full callsign" autocomplete="off" spellcheck="false" title="Your aircraft's full callsign, e.g. NJE123W - searched for near the ICAO above">
+        <button id="ownShipTrackBtn" type="button" title="Find this callsign near the ICAO above, then track it as your own ship">Track</button>
+        <button id="ownShipStopBtn" type="button" class="hidden" title="Stop own-ship tracking">Stop</button>
+      </div>
       <div class="control-group zoom-group">
         <label>Range</label>
         <button id="zoomOutBtn" class="zoom-btn" title="Zoom out">&minus;</button>
@@ -171,6 +177,7 @@ INDEX_HTML = r"""<!DOCTYPE html>
       <div class="control-group alt-filter">
         <button id="altFilterBtn" type="button">Altitude &#9662;</button>
         <div id="altFilterMenu" class="alt-filter-menu hidden">
+          <div id="altFilterAutoNote" class="alt-filter-auto-note hidden">Auto: own altitude &plusmn; 5,000 ft (own-ship tracking)</div>
           <label><input type="checkbox" data-band="ground-5000" checked> Ground &ndash; 5,000 ft</label>
           <label><input type="checkbox" data-band="5000-10000" checked> 5,000 &ndash; 10,000 ft</label>
           <label><input type="checkbox" data-band="10000-20000" checked> 10,000 &ndash; 20,000 ft</label>
@@ -208,18 +215,36 @@ INDEX_HTML = r"""<!DOCTYPE html>
       </div>
 
       <aside class="sidebar">
+        <div id="ownShipPanel" class="own-ship-panel hidden">
+          <div class="own-ship-header">
+            <h2>Own Ship</h2>
+          </div>
+          <div class="details-body">
+            <div class="details-row"><span class="details-label">Callsign</span><span id="ownShipCallsignOut">--</span></div>
+            <div class="details-row"><span class="details-label">Track</span><span id="ownShipTrackOut">--</span></div>
+            <div class="details-row"><span class="details-label">FL</span><span id="ownShipFlOut">--</span></div>
+            <div class="details-row"><span class="details-label">GS</span><span id="ownShipGsOut">--</span></div>
+          </div>
+        </div>
+
         <div id="detailsPanel" class="details-panel hidden">
           <div class="details-header">
             <h2 id="detailsTitle">--</h2>
-            <button id="detailsClose" class="close-btn" title="Close">&times;</button>
+            <div class="details-header-actions">
+              <button id="detailsTrackBtn" class="track-btn" type="button" title="Recenter the display and follow this aircraft as it moves">Track</button>
+              <button id="detailsClose" class="close-btn" title="Close">&times;</button>
+            </div>
           </div>
           <div class="details-body">
             <div class="details-row"><span class="details-label">Type</span><span id="detailsType">--</span></div>
             <div class="details-row"><span class="details-label">Registration</span><span id="detailsReg">--</span></div>
             <div class="details-row"><span class="details-label">Route</span><span id="detailsRoute">--</span></div>
             <div class="details-row"><span class="details-label">Altitude</span><span id="detailsAlt">--</span></div>
+            <div class="details-row own-ship-relative hidden"><span class="details-label">Rel. Altitude</span><span id="detailsRelAlt">--</span></div>
             <div class="details-row"><span class="details-label">Ground speed</span><span id="detailsGs">--</span></div>
+            <div class="details-row own-ship-relative hidden"><span class="details-label">Closure</span><span id="detailsClosure">--</span></div>
             <div class="details-row"><span class="details-label">Heading</span><span id="detailsTrack">--</span></div>
+            <div class="details-row own-ship-relative hidden"><span class="details-label">Rel. Track</span><span id="detailsRelTrack">--</span></div>
             <div class="details-row"><span class="details-label">Distance / Brg</span><span id="detailsDist">--</span></div>
             <div class="details-row"><span class="details-label">Squawk</span><span id="detailsSquawk">--</span></div>
           </div>
@@ -369,6 +394,33 @@ button:hover { background: var(--green); color: #04170c; }
   background: var(--border);
   margin: 2px 0;
 }
+
+.alt-filter-auto-note {
+  font-size: 11px;
+  color: var(--dim-text);
+  font-style: italic;
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--border);
+  max-width: 190px;
+  white-space: normal;
+}
+
+.own-ship-group .hidden { display: none; }
+
+.own-ship-group input#ownCallsignInput:disabled,
+input#icaoInput:disabled,
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#ownShipStopBtn {
+  background: #3a1414;
+  border-color: var(--red);
+  color: #ffdede;
+}
+#ownShipStopBtn:hover { background: var(--red); color: #2a0a0a; }
 
 .alt-filter-actions {
   display: flex;
@@ -598,6 +650,7 @@ tbody td {
 
 tbody tr:hover { background: #10161d; cursor: pointer; }
 tbody tr.selected { background: #142219; box-shadow: inset 2px 0 0 var(--green); }
+tbody tr.tracked:not(.selected) { box-shadow: inset 2px 0 0 var(--yellow); }
 
 .flight-cell { color: var(--yellow); }
 .type-cell { color: var(--cyan); }
@@ -631,6 +684,32 @@ canvas#radar { cursor: pointer; }
   letter-spacing: 0.03em;
 }
 
+.own-ship-panel {
+  border: 1px solid var(--green);
+  border-radius: 6px;
+  background: #0a1712;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.own-ship-panel.hidden { display: none; }
+
+.own-ship-header {
+  padding: 8px 12px;
+  background: #123a24;
+  border-bottom: 1px solid var(--green);
+}
+
+.own-ship-header h2 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--green);
+  text-transform: none;
+  letter-spacing: 0.03em;
+}
+
+.details-row.own-ship-relative.hidden { display: none; }
+
 .close-btn {
   background: transparent;
   border: none;
@@ -640,6 +719,32 @@ canvas#radar { cursor: pointer; }
   padding: 0 4px;
 }
 .close-btn:hover { color: var(--red); background: transparent; }
+
+.details-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.track-btn {
+  background: #0e1f16;
+  border: 1px solid var(--green-dim);
+  color: var(--green);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.track-btn:hover { background: var(--green-dim); color: #04120a; }
+
+.track-btn.active {
+  background: #3a1414;
+  border-color: var(--red);
+  color: #ffdede;
+}
+.track-btn.active:hover { background: var(--red); color: #2a0a0a; }
 
 .details-body { padding: 10px 12px; }
 
@@ -718,6 +823,15 @@ RADAR_JS = r"""(() => {
     { id: "40000-50000", min: 40000, max: 50000, label: "40,000 – 50,000 ft" },
   ];
 
+  // Own-ship tracking: found by searching for a callsign near a chosen ICAO,
+  // then self-located each poll from that aircraft's own ADS-B echo (own
+  // position/track/altitude come from its transponder, not the phone).
+  const OWNSHIP_MIN_RANGE_NM = 5;
+  const OWNSHIP_MAX_RANGE_NM = 50;
+  const OWNSHIP_DEFAULT_RANGE_NM = 25;
+  const OWNSHIP_ALT_WINDOW_FT = 5000;
+  const OWNSHIP_SEARCH_RANGE_NM = 250; // the widest adsb.fi/airplanes.live will actually query anyway
+
   const els = {
     icaoInput: document.getElementById("icaoInput"),
     goBtn: document.getElementById("goBtn"),
@@ -740,9 +854,14 @@ RADAR_JS = r"""(() => {
     altFilterMenu: document.getElementById("altFilterMenu"),
     altFilterAll: document.getElementById("altFilterAll"),
     altFilterNone: document.getElementById("altFilterNone"),
+    altFilterAutoNote: document.getElementById("altFilterAutoNote"),
     hideGroundTraffic: document.getElementById("hideGroundTraffic"),
+    ownCallsignInput: document.getElementById("ownCallsignInput"),
+    ownShipTrackBtn: document.getElementById("ownShipTrackBtn"),
+    ownShipStopBtn: document.getElementById("ownShipStopBtn"),
     detailsPanel: document.getElementById("detailsPanel"),
     detailsClose: document.getElementById("detailsClose"),
+    detailsTrackBtn: document.getElementById("detailsTrackBtn"),
     detailsTitle: document.getElementById("detailsTitle"),
     detailsType: document.getElementById("detailsType"),
     detailsReg: document.getElementById("detailsReg"),
@@ -752,6 +871,14 @@ RADAR_JS = r"""(() => {
     detailsTrack: document.getElementById("detailsTrack"),
     detailsDist: document.getElementById("detailsDist"),
     detailsSquawk: document.getElementById("detailsSquawk"),
+    detailsRelAlt: document.getElementById("detailsRelAlt"),
+    detailsClosure: document.getElementById("detailsClosure"),
+    detailsRelTrack: document.getElementById("detailsRelTrack"),
+    ownShipPanel: document.getElementById("ownShipPanel"),
+    ownShipCallsignOut: document.getElementById("ownShipCallsignOut"),
+    ownShipTrackOut: document.getElementById("ownShipTrackOut"),
+    ownShipFlOut: document.getElementById("ownShipFlOut"),
+    ownShipGsOut: document.getElementById("ownShipGsOut"),
     viewRadarBtn: document.getElementById("viewRadarBtn"),
     viewMapBtn: document.getElementById("viewMapBtn"),
     radarBezel: document.getElementById("radarBezel"),
@@ -789,14 +916,51 @@ RADAR_JS = r"""(() => {
     callsignPrefixes: [],   // [] = no filter, show everything
     registrationPrefixes: [],
     hideGroundTraffic: false,  // overrides the ground-5000 band: force-hide on_ground aircraft
+    ownShip: {
+      active: false,
+      callsign: null,
+      hex: null,        // locked onto by hex once found, so we don't re-match by callsign every cycle
+      lat: null,
+      lon: null,
+      track: null,
+      altBaro: null,    // number, or "ground"
+      gs: null,
+      lastSeenAt: null,
+    },
+    preOwnShip: null,  // snapshot of {rangeNm, activeAltBands, viewMode} to restore when tracking stops
+    trackedTraffic: {
+      active: false,
+      hex: null,
+      callsign: null,
+      lat: null,
+      lon: null,
+      track: null,
+      altBaro: null,
+      gs: null,
+      lastSeenAt: null,
+    },
+    preTrackedCenter: null,  // snapshot of {mode, icao, lat, lon, locationLabel} to restore when traffic-tracking stops (only used if own-ship isn't already driving the center)
   };
+
+  function isOwnShipHex(hex) {
+    return state.ownShip.active && state.ownShip.hex != null && hex === state.ownShip.hex;
+  }
 
   function altitudeVisible(ac) {
     if (ac.on_ground) {
       if (state.hideGroundTraffic) return false;
+      if (state.ownShip.active) return true; // bands are inert in own-ship mode; ground toggle above still applies
       return state.activeAltBands.has("ground-5000");
     }
     if (ac.alt_baro == null || typeof ac.alt_baro !== "number") return true; // unknown altitude - never hide
+
+    if (state.ownShip.active) {
+      const ownAlt = state.ownShip.altBaro === "ground" ? 0
+        : (typeof state.ownShip.altBaro === "number" ? state.ownShip.altBaro : null);
+      if (ownAlt == null) return true; // own altitude not known yet - don't filter
+      return ac.alt_baro >= ownAlt - OWNSHIP_ALT_WINDOW_FT && ac.alt_baro <= ownAlt + OWNSHIP_ALT_WINDOW_FT;
+    }
+
     for (const band of ALT_BANDS) {
       const upperInclusive = band.id === ALT_BANDS[ALT_BANDS.length - 1].id;
       if (ac.alt_baro >= band.min && (upperInclusive ? ac.alt_baro <= band.max : ac.alt_baro < band.max)) {
@@ -832,7 +996,7 @@ RADAR_JS = r"""(() => {
   }
 
   function applyFiltersAndRender() {
-    const all = Array.from(state.lastAircraftByHex.values());
+    const all = Array.from(state.lastAircraftByHex.values()).filter((ac) => !isOwnShipHex(ac.hex));
     const filtered = all.filter(isAircraftVisible);
     renderCurrentView(filtered, state.rangeNm, state.lastQueryDistNm);
     updateSidebar(filtered, all.length);
@@ -913,6 +1077,238 @@ RADAR_JS = r"""(() => {
     );
   }
 
+  // ---------- own-ship tracking ----------
+  //
+  // Bootstrapped by searching for a callsign near a chosen ICAO. Once found,
+  // that aircraft's own hex is locked onto and self-located every poll from
+  // its own ADS-B echo (real transponder position/track/altitude, not the
+  // phone's) - so the radar keeps following it without any further input.
+
+  function disableAltFilterUI(disabled) {
+    for (const cb of altBandCheckboxes()) cb.disabled = disabled;
+    els.altFilterAll.disabled = disabled;
+    els.altFilterNone.disabled = disabled;
+    els.altFilterAutoNote.classList.toggle("hidden", !disabled);
+  }
+
+  async function trackOwnShip() {
+    const icao = (els.icaoInput.value || "").trim().toUpperCase();
+    const callsign = (els.ownCallsignInput.value || "").trim().toUpperCase();
+    if (icao.length !== 4) {
+      setStatus("Enter a 4-letter ICAO above to search near, e.g. KRDU", true);
+      return;
+    }
+    if (!callsign) {
+      setStatus("Enter your aircraft's full callsign to track", true);
+      return;
+    }
+    setStatus(`Searching for ${callsign} near ${icao}...`);
+    try {
+      const resp = await fetch(`/api/aircraft?icao=${encodeURIComponent(icao)}&range_nm=${OWNSHIP_SEARCH_RANGE_NM}`);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "request failed");
+      const match = (data.aircraft || []).find((ac) => (ac.flight || "").trim().toUpperCase() === callsign);
+      if (!match) {
+        setStatus(`${callsign} not found near ${icao} - make sure it's currently broadcasting and within range, then try again`, true);
+        return;
+      }
+      activateOwnShip(match, callsign);
+    } catch (err) {
+      setStatus("Own ship search failed: " + err.message, true);
+    }
+  }
+
+  function activateOwnShip(ac, callsign) {
+    // own-ship activation is the "recenter on me" action - it takes priority
+    // over any dangling traffic-track lock rather than fighting it for the
+    // query center every poll.
+    clearTrackedTrafficSilently();
+
+    state.preOwnShip = {
+      rangeNm: state.rangeNm,
+      activeAltBands: new Set(state.activeAltBands),
+      viewMode: state.viewMode,
+    };
+
+    state.ownShip.active = true;
+    state.ownShip.callsign = callsign;
+    state.ownShip.hex = ac.hex;
+    state.ownShip.lat = ac.lat;
+    state.ownShip.lon = ac.lon;
+    state.ownShip.track = ac.track;
+    state.ownShip.altBaro = ac.alt_baro;
+    state.ownShip.gs = ac.gs;
+    state.ownShip.lastSeenAt = Date.now();
+
+    els.ownShipTrackBtn.classList.add("hidden");
+    els.ownShipStopBtn.classList.remove("hidden");
+    els.ownCallsignInput.disabled = true;
+    els.icaoInput.disabled = true;
+    els.goBtn.disabled = true;
+    els.geoBtn.disabled = true;
+
+    disableAltFilterUI(true);
+    updateOwnShipPanel();
+    setOwnShipRelativeRowsVisible(true);
+
+    state.rangeNm = niceRange(clampRange(OWNSHIP_DEFAULT_RANGE_NM));
+    els.rangeValue.textContent = `${state.rangeNm} nm`;
+
+    if (state.viewMode !== "radar") setViewMode("radar");
+
+    goToLatLon(ac.lat, ac.lon, `OWN SHIP: ${callsign}`);
+  }
+
+  function stopOwnShip() {
+    state.ownShip.active = false;
+    state.ownShip.callsign = null;
+    state.ownShip.hex = null;
+    state.ownShip.track = null;
+    state.ownShip.altBaro = null;
+    state.ownShip.gs = null;
+    state.ownShip.lastSeenAt = null;
+
+    els.ownShipTrackBtn.classList.remove("hidden");
+    els.ownShipStopBtn.classList.add("hidden");
+    els.ownCallsignInput.disabled = false;
+    els.icaoInput.disabled = false;
+    els.goBtn.disabled = false;
+    els.geoBtn.disabled = false;
+
+    disableAltFilterUI(false);
+    updateOwnShipPanel();
+    setOwnShipRelativeRowsVisible(false);
+
+    if (state.preOwnShip) {
+      state.rangeNm = niceRange(clampRange(state.preOwnShip.rangeNm));
+      els.rangeValue.textContent = `${state.rangeNm} nm`;
+      state.activeAltBands = state.preOwnShip.activeAltBands;
+      for (const cb of altBandCheckboxes()) cb.checked = state.activeAltBands.has(cb.dataset.band);
+      const restoreView = state.preOwnShip.viewMode;
+      state.preOwnShip = null;
+      if (restoreView !== state.viewMode) setViewMode(restoreView);
+    }
+
+    setStatus("Own ship tracking stopped");
+    saveLastLocation();
+    if (state.lastAircraftByHex.size) applyFiltersAndRender();
+  }
+
+  // ---------- traffic tracking ----------
+  //
+  // Recenter-and-follow for any selected traffic contact, not just own ship.
+  // The query center follows that aircraft's live position every poll (same
+  // mechanism as own-ship centering), so it stays in the middle of the radar
+  // and the map keeps panning to it. Independent of own-ship mode: if both
+  // are active, the tracked traffic wins the query center for this poll,
+  // while own ship's own panel/self-location keeps updating regardless.
+
+  function isTrackedTraffic(hex) {
+    return state.trackedTraffic.active && state.trackedTraffic.hex != null && hex === state.trackedTraffic.hex;
+  }
+
+  // What to print at the radar's center: just the callsign while own-ship or
+  // traffic tracking is active (the full "OWN SHIP: X · TRK 090°" text is
+  // still used for the footer/map tooltip via state.locationLabel).
+  function radarCenterLabel() {
+    if (state.ownShip.active) return state.ownShip.callsign || state.locationLabel;
+    if (state.trackedTraffic.active) return state.trackedTraffic.callsign || state.locationLabel;
+    return state.locationLabel;
+  }
+
+  function recenterSilently(lat, lon, label, mode, icao) {
+    // Like goToLatLon(), but doesn't reset polling timers or close the
+    // details panel - used while a details panel stays open during tracking.
+    state.mode = mode || "latlon";
+    state.icao = mode === "icao" ? icao : null;
+    state.lat = lat;
+    state.lon = lon;
+    state.locationLabel = label;
+    saveLastLocation();
+    refreshAircraft();
+  }
+
+  function updateTrackButton() {
+    const isTracking = state.trackedTraffic.active && state.trackedTraffic.hex === state.selectedHex;
+    els.detailsTrackBtn.classList.toggle("active", isTracking);
+    els.detailsTrackBtn.textContent = isTracking ? "Stop" : "Track";
+  }
+
+  function clearTrackedTrafficSilently() {
+    state.trackedTraffic.active = false;
+    state.trackedTraffic.hex = null;
+    state.trackedTraffic.callsign = null;
+    state.trackedTraffic.track = null;
+    state.trackedTraffic.altBaro = null;
+    state.trackedTraffic.gs = null;
+    state.trackedTraffic.lastSeenAt = null;
+    state.preTrackedCenter = null;
+    updateTrackButton();
+  }
+
+  function startTrackingTraffic(ac) {
+    if (!ac || !ac.hex) return;
+    if (ac.lat == null || ac.lon == null) {
+      setStatus("No position data for this aircraft yet - can't track", true);
+      return;
+    }
+
+    if (!state.trackedTraffic.active) {
+      state.preTrackedCenter = {
+        mode: state.mode, icao: state.icao, lat: state.lat, lon: state.lon,
+        locationLabel: state.locationLabel,
+      };
+    }
+
+    state.trackedTraffic.active = true;
+    state.trackedTraffic.hex = ac.hex;
+    state.trackedTraffic.callsign = ac.flight || ac.reg || ac.hex;
+    state.trackedTraffic.lat = ac.lat;
+    state.trackedTraffic.lon = ac.lon;
+    state.trackedTraffic.track = ac.track;
+    state.trackedTraffic.altBaro = ac.alt_baro;
+    state.trackedTraffic.gs = ac.gs;
+    state.trackedTraffic.lastSeenAt = Date.now();
+
+    updateTrackButton();
+    recenterSilently(ac.lat, ac.lon, `TRACKING: ${state.trackedTraffic.callsign}`);
+  }
+
+  function stopTrackingTraffic() {
+    if (!state.trackedTraffic.active) return;
+    state.trackedTraffic.active = false;
+    state.trackedTraffic.hex = null;
+    state.trackedTraffic.callsign = null;
+    state.trackedTraffic.track = null;
+    state.trackedTraffic.altBaro = null;
+    state.trackedTraffic.gs = null;
+    state.trackedTraffic.lastSeenAt = null;
+    updateTrackButton();
+
+    if (!state.ownShip.active && state.preTrackedCenter) {
+      const c = state.preTrackedCenter;
+      state.preTrackedCenter = null;
+      recenterSilently(c.lat, c.lon, c.locationLabel, c.mode, c.icao);
+    } else {
+      state.preTrackedCenter = null;
+      setStatus("Traffic tracking stopped");
+      if (state.lastAircraftByHex.size) applyFiltersAndRender();
+    }
+  }
+
+  els.detailsTrackBtn.addEventListener("click", () => {
+    if (state.trackedTraffic.active && state.trackedTraffic.hex === state.selectedHex) {
+      stopTrackingTraffic();
+      return;
+    }
+    const ac = state.lastAircraftByHex.get(state.selectedHex);
+    if (!ac) {
+      setStatus("Aircraft no longer in range - can't track", true);
+      return;
+    }
+    startTrackingTraffic(ac);
+  });
+
   // ---------- polling ----------
 
   function restartPolling() {
@@ -937,16 +1333,66 @@ RADAR_JS = r"""(() => {
       const resp = await fetch("/api/aircraft?" + params.toString());
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || "request failed");
-      const sourceNote = data.data_source && data.data_source !== "adsb.fi" ? ` (via ${data.data_source} fallback)` : "";
-      const limitNote = data.query_dist_nm < data.range_nm ? ` · data limited to ${data.query_dist_nm}nm` : "";
-      setStatus(`${data.count} aircraft · updated ${new Date().toLocaleTimeString()}${sourceNote}${limitNote}`);
 
       state.lastAircraftByHex = new Map(data.aircraft.map((ac) => [ac.hex, ac]));
       state.lastQueryDistNm = data.query_dist_nm;
 
-      const filtered = data.aircraft.filter(isAircraftVisible);
+      let ownShipNote = "";
+      if (state.ownShip.active) {
+        const ownAc = state.ownShip.hex ? data.aircraft.find((ac) => ac.hex === state.ownShip.hex) : null;
+        if (ownAc) {
+          // self-located from our own ADS-B echo - recenter for the next poll
+          // so the radar keeps following, and refresh track/altitude for the
+          // auto altitude filter and track-up rotation.
+          state.ownShip.lat = ownAc.lat;
+          state.ownShip.lon = ownAc.lon;
+          state.ownShip.track = ownAc.track;
+          state.ownShip.altBaro = ownAc.alt_baro;
+          state.ownShip.gs = ownAc.gs;
+          state.ownShip.lastSeenAt = Date.now();
+          state.lat = ownAc.lat;
+          state.lon = ownAc.lon;
+          state.locationLabel = state.ownShip.track != null
+            ? `OWN SHIP: ${state.ownShip.callsign} · TRK ${Math.round(state.ownShip.track)}°`
+            : `OWN SHIP: ${state.ownShip.callsign}`;
+        } else if (state.ownShip.lastSeenAt) {
+          const staleSec = Math.round((Date.now() - state.ownShip.lastSeenAt) / 1000);
+          ownShipNote = ` · own ship signal lost ${staleSec}s ago, showing last known position`;
+        }
+        updateOwnShipPanel();
+      }
+
+      let trackedNote = "";
+      if (state.trackedTraffic.active) {
+        const tAc = state.trackedTraffic.hex ? data.aircraft.find((ac) => ac.hex === state.trackedTraffic.hex) : null;
+        if (tAc) {
+          // self-located the same way own ship is - recenter for the next
+          // poll so the radar (and, in map view, the viewport) keeps
+          // following this specific contact.
+          state.trackedTraffic.lat = tAc.lat;
+          state.trackedTraffic.lon = tAc.lon;
+          state.trackedTraffic.track = tAc.track;
+          state.trackedTraffic.altBaro = tAc.alt_baro;
+          state.trackedTraffic.gs = tAc.gs;
+          state.trackedTraffic.lastSeenAt = Date.now();
+          state.lat = tAc.lat;
+          state.lon = tAc.lon;
+          state.locationLabel = `TRACKING: ${state.trackedTraffic.callsign}`;
+        } else if (state.trackedTraffic.lastSeenAt) {
+          const staleSec = Math.round((Date.now() - state.trackedTraffic.lastSeenAt) / 1000);
+          trackedNote = ` · tracked traffic signal lost ${staleSec}s ago, showing last known position`;
+        }
+      }
+
+      const sourceNote = data.data_source && data.data_source !== "adsb.fi" ? ` (via ${data.data_source} fallback)` : "";
+      const limitNote = data.query_dist_nm < data.range_nm ? ` · data limited to ${data.query_dist_nm}nm` : "";
+      setStatus(`${data.count} aircraft · updated ${new Date().toLocaleTimeString()}${sourceNote}${limitNote}${ownShipNote}${trackedNote}`);
+
+      const traffic = data.aircraft.filter((ac) => !isOwnShipHex(ac.hex));
+      const filtered = traffic.filter(isAircraftVisible);
       renderCurrentView(filtered, data.range_nm, data.query_dist_nm);
-      updateSidebar(filtered, data.aircraft.length);
+      updateSidebar(filtered, traffic.length);
+      if ((state.ownShip.active || state.trackedTraffic.active) && state.viewMode === "map") recenterMap();
       if (els.routesToggle.checked) queueRouteLookups(filtered);
       if (state.selectedHex) refreshDetailsLiveFields();
     } catch (err) {
@@ -1072,6 +1518,7 @@ RADAR_JS = r"""(() => {
       const tr = document.createElement("tr");
       tr.dataset.hex = ac.hex;
       if (ac.hex === state.selectedHex) tr.classList.add("selected");
+      if (isTrackedTraffic(ac.hex)) tr.classList.add("tracked");
       const alt = ac.on_ground ? "GND" : (ac.alt_baro != null ? `${ac.alt_baro} ft` : "--");
       tr.innerHTML = `
         <td class="flight-cell">${ac.flight || ac.reg || ac.hex}</td>
@@ -1091,6 +1538,11 @@ RADAR_JS = r"""(() => {
     const size = CANVAS_SIZE;
     const cx = size / 2, cy = size / 2;
     const R = size / 2 - size * 0.08;
+
+    // Track-up: when own-ship tracking is active, "up" means own current
+    // track instead of true north - everything (compass, aircraft position,
+    // aircraft heading arrows) rotates by this same offset.
+    const rotationOffset = (state.ownShip.active && state.ownShip.track != null) ? state.ownShip.track : 0;
 
     state.lastMarkers = [];
 
@@ -1123,17 +1575,18 @@ RADAR_JS = r"""(() => {
     ctx.arc(cx, cy, 3, 0, Math.PI * 2);
     ctx.fill();
 
-    // compass labels
+    // compass labels - rotate around the ring with rotationOffset so a
+    // track-up display shows a proper turning compass rose, not just a
+    // fixed "N" at top that would otherwise be wrong once rotated.
     ctx.fillStyle = COLORS.text;
     ctx.font = `bold ${Math.round(size * 0.032)}px monospace`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("N", cx, cy - R - size * 0.03);
-    ctx.fillText("S", cx, cy + R + size * 0.03);
-    ctx.textAlign = "left";
-    ctx.fillText("E", cx + R + size * 0.015, cy);
-    ctx.textAlign = "right";
-    ctx.fillText("W", cx - R - size * 0.015, cy);
+    const compassR = R + size * 0.04;
+    for (const [label, trueBearing] of [["N", 0], ["E", 90], ["S", 180], ["W", 270]]) {
+      const angleRad = (((trueBearing - rotationOffset) % 360 + 360) % 360) * Math.PI / 180;
+      ctx.fillText(label, cx + compassR * Math.sin(angleRad), cy - compassR * Math.cos(angleRad));
+    }
 
     // range label on the 3/4 ring, east side
     ctx.fillStyle = COLORS.dim;
@@ -1168,20 +1621,47 @@ RADAR_JS = r"""(() => {
       );
     }
 
-    // home marker label near center
+    // home marker label near center - just the callsign while own-ship or
+    // traffic tracking is active (the fuller "OWN SHIP: X · TRK 090°" /
+    // "TRACKING: X" text is still shown in the footer and, in map view, the
+    // home marker's tooltip; here it'd just clutter the display right next
+    // to the arrow/aircraft, and the same info is already on the side panel).
     ctx.fillStyle = COLORS.home;
     ctx.font = `bold ${Math.round(size * 0.026)}px monospace`;
     ctx.textAlign = "center";
-    ctx.fillText(state.locationLabel, cx, cy + size * 0.06);
+    ctx.fillText(radarCenterLabel(), cx, cy + size * 0.06);
 
     // aircraft
     for (const ac of aircraftList) {
-      drawAircraft(ac, cx, cy, R, rangeNm, size);
+      drawAircraft(ac, cx, cy, R, rangeNm, size, rotationOffset);
+    }
+
+    // own-ship marker: always points "up" on a track-up display, by definition
+    if (state.ownShip.active) {
+      drawOwnShipMarker(cx, cy, size);
     }
   }
 
-  function drawAircraft(ac, cx, cy, R, rangeNm, size) {
-    const bearingRad = (ac.bearing * Math.PI) / 180;
+  function drawOwnShipMarker(cx, cy, size) {
+    const s = size * 0.02;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.fillStyle = COLORS.selected;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 1.8);
+    ctx.lineTo(s * 1.1, s * 1.2);
+    ctx.lineTo(0, s * 0.5);
+    ctx.lineTo(-s * 1.1, s * 1.2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawAircraft(ac, cx, cy, R, rangeNm, size, rotationOffset) {
+    // Position relative to own track when own-ship tracking is active
+    // (rotationOffset is 0 otherwise, so this is a no-op in normal mode).
+    const displayBearing = ((ac.bearing - rotationOffset) % 360 + 360) % 360;
+    const bearingRad = (displayBearing * Math.PI) / 180;
     const clamped = Math.min(ac.distance_nm, rangeNm);
     const rPx = (clamped / rangeNm) * R;
     const x = cx + rPx * Math.sin(bearingRad);
@@ -1189,7 +1669,7 @@ RADAR_JS = r"""(() => {
 
     state.lastMarkers.push({ x, y, ac });
 
-    const isSelected = ac.hex === state.selectedHex;
+    const isSelected = ac.hex === state.selectedHex || isTrackedTraffic(ac.hex);
 
     if (isSelected) {
       ctx.strokeStyle = COLORS.selected;
@@ -1208,7 +1688,8 @@ RADAR_JS = r"""(() => {
       return;
     }
 
-    const trackRad = ((ac.track || 0) * Math.PI) / 180;
+    const displayTrack = (((ac.track || 0) - rotationOffset) % 360 + 360) % 360;
+    const trackRad = (displayTrack * Math.PI) / 180;
     const color = ac.on_ground ? COLORS.headingGround : COLORS.heading;
 
     // speed vector (magenta), length scaled by groundspeed
@@ -1349,7 +1830,7 @@ RADAR_JS = r"""(() => {
     for (const ac of aircraftList) {
       if (ac.lat == null || ac.lon == null) continue;
       seenHex.add(ac.hex);
-      const isSelected = ac.hex === state.selectedHex;
+      const isSelected = ac.hex === state.selectedHex || isTrackedTraffic(ac.hex);
       const latlng = [ac.lat, ac.lon];
       let marker = state.mapMarkers.get(ac.hex);
       if (!marker) {
@@ -1416,6 +1897,9 @@ RADAR_JS = r"""(() => {
   let rangeRefetchTimer = null;
 
   function clampRange(r) {
+    if (state.ownShip.active) {
+      return Math.min(OWNSHIP_MAX_RANGE_NM, Math.max(OWNSHIP_MIN_RANGE_NM, r));
+    }
     return Math.min(MAX_RANGE_NM, Math.max(MIN_RANGE_NM, r));
   }
 
@@ -1592,9 +2076,84 @@ RADAR_JS = r"""(() => {
     return `${icao} · ${info.name}`;
   }
 
+  // ---------- own-ship relative readouts ----------
+
+  function signedRelative(deg) {
+    let d = ((deg % 360) + 360) % 360;
+    if (d > 180) d -= 360;
+    return d;
+  }
+
+  function fmtFlightLevel(altBaro) {
+    if (altBaro === "ground") return "GND";
+    if (typeof altBaro !== "number") return "--";
+    return `FL${String(Math.round(altBaro / 100)).padStart(3, "0")}`;
+  }
+
+  // Closure rate: relative velocity (traffic minus own ship) projected onto
+  // the line-of-sight between them. Positive = closing (range shrinking),
+  // negative = opening. Needs both aircraft's track+groundspeed and the
+  // traffic's bearing from own ship (which is the query center in own-ship
+  // mode, so ac.bearing already IS "from own ship to this traffic").
+  function computeClosureRate(ac) {
+    const ownTrack = state.ownShip.track, ownGs = state.ownShip.gs;
+    if (ownTrack == null || ownGs == null || ac.track == null || ac.gs == null) return null;
+    const toRad = Math.PI / 180;
+    const vxOwn = ownGs * Math.sin(ownTrack * toRad), vyOwn = ownGs * Math.cos(ownTrack * toRad);
+    const vxAc = ac.gs * Math.sin(ac.track * toRad), vyAc = ac.gs * Math.cos(ac.track * toRad);
+    const vxRel = vxAc - vxOwn, vyRel = vyAc - vyOwn;
+    const losX = Math.sin(ac.bearing * toRad), losY = Math.cos(ac.bearing * toRad);
+    const rangeRate = vxRel * losX + vyRel * losY; // + = opening, - = closing
+    return -rangeRate;
+  }
+
+  function fmtClosure(rate) {
+    if (rate == null || !isFinite(rate)) return "--";
+    const rounded = Math.round(Math.abs(rate));
+    if (rounded < 5) return "Stable";
+    return rate > 0 ? `Closing ${rounded} kt` : `Opening ${rounded} kt`;
+  }
+
+  function setOwnShipRelativeRowsVisible(visible) {
+    for (const row of document.querySelectorAll(".own-ship-relative")) {
+      row.classList.toggle("hidden", !visible);
+    }
+  }
+
+  function updateRelativeDetails(ac) {
+    if (!state.ownShip.active) return;
+    if (typeof ac.alt_baro === "number" && typeof state.ownShip.altBaro === "number") {
+      const diff = Math.round(ac.alt_baro - state.ownShip.altBaro);
+      els.detailsRelAlt.textContent = `${diff > 0 ? "+" : ""}${diff.toLocaleString()} ft`;
+    } else {
+      els.detailsRelAlt.textContent = "--";
+    }
+    if (ac.track != null && state.ownShip.track != null) {
+      const rel = Math.round(signedRelative(ac.track - state.ownShip.track));
+      els.detailsRelTrack.textContent = `${rel > 0 ? "+" : ""}${rel}°`;
+    } else {
+      els.detailsRelTrack.textContent = "--";
+    }
+    els.detailsClosure.textContent = fmtClosure(computeClosureRate(ac));
+  }
+
+  function updateOwnShipPanel() {
+    if (!state.ownShip.active) {
+      els.ownShipPanel.classList.add("hidden");
+      return;
+    }
+    els.ownShipPanel.classList.remove("hidden");
+    els.ownShipCallsignOut.textContent = state.ownShip.callsign || "--";
+    els.ownShipTrackOut.textContent = state.ownShip.track != null ? `${Math.round(state.ownShip.track)}°` : "--";
+    els.ownShipFlOut.textContent = fmtFlightLevel(state.ownShip.altBaro);
+    els.ownShipGsOut.textContent = state.ownShip.gs != null ? `${Math.round(state.ownShip.gs)} kt` : "--";
+  }
+
   function selectAircraft(ac) {
     state.selectedHex = ac.hex;
     els.detailsPanel.classList.remove("hidden");
+    setOwnShipRelativeRowsVisible(state.ownShip.active);
+    updateTrackButton();
 
     // highlight matching row
     for (const tr of els.aircraftBody.querySelectorAll("tr")) {
@@ -1618,6 +2177,7 @@ RADAR_JS = r"""(() => {
     els.detailsTrack.textContent = fmtTrack(ac);
     els.detailsDist.textContent = fmtDist(ac);
     els.detailsSquawk.textContent = ac.squawk || "--";
+    updateRelativeDetails(ac);
   }
 
   function refreshDetailsLiveFields() {
@@ -1631,6 +2191,7 @@ RADAR_JS = r"""(() => {
     els.detailsTrack.textContent = fmtTrack(ac);
     els.detailsDist.textContent = fmtDist(ac);
     els.detailsSquawk.textContent = ac.squawk || "--";
+    updateRelativeDetails(ac);
   }
 
   async function populateRoute(ac) {
@@ -1682,6 +2243,11 @@ RADAR_JS = r"""(() => {
   });
   els.geoBtn.addEventListener("click", useMyLocation);
   els.weatherToggle.addEventListener("change", refreshWeather);
+  els.ownShipTrackBtn.addEventListener("click", trackOwnShip);
+  els.ownShipStopBtn.addEventListener("click", stopOwnShip);
+  els.ownCallsignInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") trackOwnShip();
+  });
 
   // initial state: restore last session, else default to KRDU at DEFAULT_RANGE_NM
   const last = loadLastLocation();
